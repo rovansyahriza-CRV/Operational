@@ -1,0 +1,32 @@
+DO $$
+DECLARE p uuid; c uuid; c2 uuid; g uuid; g2 uuid; i uuid; w uuid; pack uuid; wi uuid; val numeric; bad boolean;
+BEGIN
+ INSERT INTO operational.projects(code,name) VALUES('__test__','Test') RETURNING id INTO p;
+ INSERT INTO operational.contracts(project_id,number,contract_type) VALUES(p,'TEST','BLANKET_ORDER') RETURNING id INTO c;
+ INSERT INTO operational.contracts(project_id,number,contract_type) VALUES(p,'TEST2','LUMPSUM') RETURNING id INTO c2;
+ INSERT INTO operational.commercial_items(contract_id,code,description,row_kind) VALUES(c,'G','Group','GROUP') RETURNING id INTO g;
+ INSERT INTO operational.commercial_items(contract_id,parent_id,code,description,row_kind) VALUES(c,g,'G2','Child group','GROUP') RETURNING id INTO g2;
+ bad:=false;
+ BEGIN UPDATE operational.commercial_items SET parent_id=g2 WHERE id=g; EXCEPTION WHEN raise_exception THEN bad:=true; END;
+ IF NOT bad THEN RAISE EXCEPTION 'TEST: cycle accepted'; END IF;
+ bad:=false;
+ BEGIN INSERT INTO operational.commercial_items(contract_id,parent_id,code,description,row_kind) VALUES(c2,g,'INVALID','Bad parent','GROUP'); EXCEPTION WHEN raise_exception THEN bad:=true; END;
+ IF NOT bad THEN RAISE EXCEPTION 'TEST: cross-contract parent accepted'; END IF;
+ INSERT INTO operational.commercial_items(contract_id,parent_id,code,description,row_kind,unit,unit_price) VALUES(c,g2,'1.1','Welder','ITEM','Hari',123.456789) RETURNING id INTO i;
+ INSERT INTO operational.work_orders(contract_id,number,title) VALUES(c,'WO-TEST','Test WO') RETURNING id INTO w;
+ INSERT INTO operational.wo_packages(wo_id,code,name) VALUES(w,'P1','Package') RETURNING id INTO pack;
+ INSERT INTO operational.wo_items(wo_id,package_id,commercial_item_id,qty) VALUES(w,pack,i,2) RETURNING id,amount INTO wi,val;
+ IF val<>246.913578 THEN RAISE EXCEPTION 'TEST: precision lost'; END IF;
+ UPDATE operational.commercial_items SET unit_price=999 WHERE id=i;
+ SELECT unit_price_snapshot INTO val FROM operational.wo_items WHERE id=wi;
+ IF val<>123.456789 THEN RAISE EXCEPTION 'TEST: snapshot changed'; END IF;
+ bad:=false;
+ BEGIN INSERT INTO operational.wo_items(wo_id,package_id,commercial_item_id,qty) VALUES(w,pack,g,1); EXCEPTION WHEN raise_exception THEN bad:=true; END;
+ IF NOT bad THEN RAISE EXCEPTION 'TEST: group accepted as priced item'; END IF;
+ UPDATE operational.work_orders SET status='APPROVED' WHERE id=w;
+ bad:=false;
+ BEGIN UPDATE operational.wo_items SET qty=3 WHERE id=wi; EXCEPTION WHEN raise_exception THEN bad:=true; END;
+ IF NOT bad THEN RAISE EXCEPTION 'TEST: approved line changed'; END IF;
+ IF has_schema_privilege('anon','operational','USAGE') OR has_schema_privilege('authenticated','operational','USAGE') THEN RAISE EXCEPTION 'TEST: unintended client access'; END IF;
+END $$;
+SELECT 'PASS: hierarchy, contract boundary, decimal precision, snapshots, approved-line protection, access isolation' AS result;
