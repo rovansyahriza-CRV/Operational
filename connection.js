@@ -177,6 +177,61 @@ $('#printSms').onclick=()=>{
  }catch(err){status(err.message)}
 };
 
+$('#exportWoExcel').onclick=()=>{
+ try{
+  const v=id=>$('#'+id).value.trim();
+  if(!wo.length||!['woNo','woTitle','projectName','contractNo'].every(id=>v(id)))throw Error('Lengkapi project, kontrak, dan WO sebelum export Excel.');
+  if(wo.some(i=>!Number.isFinite(i.qty)||i.qty<=0||!Number.isFinite(i.price)||i.price<0))throw Error('Periksa qty dan harga item sebelum export.');
+  const d=getSms();
+  const numFmt='#,##0.00';
+  const rows=[
+   ['SITE MEASUREMENT SHEET'],
+   [v('woTitle')],
+   [],
+   ['Project',v('projectName'),null,'Kontrak',v('contractNo')],
+   ['WO No.',v('woNo'),null,'SMS No.',d.number||'-'],
+   ['Notification',d.notification||'-',null,'Revisi / Tanggal',(d.revision||'-')+' / '+(d.date||'-')],
+   ['Lokasi',d.location||'-'],
+   [],
+   ['Kode','Uraian / Scope','Paket','Satuan','Qty','Unit price (Rp)','Nilai (Rp)'],
+  ];
+  const itemStart=rows.length;
+  wo.forEach(i=>rows.push([i.code,i.description,i.package||'Paket 1',i.unit,i.qty,i.price,i.qty*i.price]));
+  const itemEnd=rows.length-1;
+  rows.push([]);
+  rows.push(['Ringkasan per paket']);
+  const byPackage=new Map();
+  wo.forEach(i=>{const k=i.package||'Paket 1';byPackage.set(k,(byPackage.get(k)||0)+i.qty*i.price)});
+  const summaryStart=rows.length;
+  [...byPackage].forEach(([name,total])=>rows.push([null,null,name,null,null,null,total]));
+  const summaryEnd=rows.length-1;
+  rows.push([]);
+  const total=wo.reduce((s,i)=>s+i.qty*i.price,0);
+  const totalRow=rows.length;
+  rows.push([null,null,null,null,null,'TOTAL NILAI KOMERSIAL',total]);
+  rows.push([]);
+  rows.push(['Diekspor dari BIMA SPMS pada '+new Date().toLocaleString('id-ID')]);
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:48},{wch:16},{wch:10},{wch:10},{wch:16},{wch:18}];
+  ws['!merges']=[
+   {s:{r:0,c:0},e:{r:0,c:6}},
+   {s:{r:1,c:0},e:{r:1,c:6}}
+  ];
+  for(let r=itemStart;r<=itemEnd;r++){
+   [4,5,6].forEach(c=>{const addr=XLSX.utils.encode_cell({r,c});if(ws[addr])ws[addr].z=numFmt;});
+  }
+  for(let r=summaryStart;r<=summaryEnd;r++){const addr=XLSX.utils.encode_cell({r,c:6});if(ws[addr])ws[addr].z=numFmt;}
+  const totalAddr=XLSX.utils.encode_cell({r:totalRow,c:6});if(ws[totalAddr])ws[totalAddr].z=numFmt;
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'WO-SMS');
+  const safeName=(v('woNo')||'WO').replace(/[\\/:*?"<>|]/g,'-');
+  XLSX.writeFile(wb,'WO-SMS-'+safeName+'.xlsx');
+  status('Excel WO-SMS diunduh. Format ini untuk diolah/dipindahkan ke template kop surat masing-masing project.');
+ }catch(err){status(err.message)}
+};
+
 "use strict";
 const projectStorage='bima-spms-projects-v1';let projectList=[],editingProject=null;
 try{const saved=JSON.parse(localStorage.getItem(projectStorage)||'[]');if(!Array.isArray(saved)||saved.some(p=>!p||!['id','code','name','client','location','state'].every(k=>typeof p[k]==='string')))throw Error('Format project tidak valid');projectList=saved;}catch(e){status('Daftar project lokal tidak dapat dibaca: '+e.message);}
