@@ -31,7 +31,21 @@ $('#loginForm').onsubmit=async e=>{e.preventDefault();const b=$('#loginSubmit');
 $('#logout').onclick=async()=>{try{if(opSession)await rpc('op_logout',{p_token:opSession.token})}catch(err){status('Koneksi logout gagal; sesi di browser tetap dihapus.')}opSession=null;remoteContractId=null;remoteWoId=null;sharedDraftMeta=null;revisingSourceWoId=null;currentSmsId=null;parsed={items:[],issues:[],skipped:[]};wo=[];setSms();selected.clear();$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>';$('#savedWos').innerHTML='<option value="">Pilih WO tersimpan</option>';$('#savedSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#sharedDrafts').innerHTML='<option value="">Pilih draft tim (Supabase)</option>';$('#sharedDrafts').disabled=true;renderMaster();renderWo();resetBinding();tab('master');status('Sudah keluar. Data yang dimuat telah dibersihkan.')};
 $('#loadContracts').onclick=busy($('#loadContracts'),async()=>{remoteContracts=await api('contracts');$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>'+remoteContracts.map(c=>`<option value="${c.id}">${escapeHtml(c.project_code+' / '+c.number+' / Rev '+c.revision)}</option>`).join('');status(remoteContracts.length+' kontrak tersedia.')});
 async function loadMaster(cid){const contract=remoteContracts.find(c=>c.id===cid);if(!contract)throw Error('Pilih kontrak terlebih dahulu.');const rows=await api('master',{contractId:cid});remoteContractId=cid;remoteWoId=null;sharedDraftMeta=null;parsed={items:rows.map(i=>({id:i.id,code:i.code,description:i.description,parentId:i.parent_id,rowKind:i.row_kind,unit:i.unit,price:i.unit_price,qty:i.reference_qty,amount:i.source_amount,rate:i.rate_kind,sourceRow:i.source_row})),issues:[],skipped:[]};wo=[];setSms();selected.clear();collapsed.clear();$('#projectCode').value=contract.project_code;$('#projectName').value=contract.project_name;$('#contractNo').value=contract.number;$('#contractType').value=contract.contract_type;$('#revision').value=contract.revision;$('#contractBinding').textContent=contract.number+' · Rev '+contract.revision+' · tersimpan';renderMaster();renderWo();status('Master dimuat dari Supabase.');tab('master')}
-$('#savedContracts').onchange=async e=>{if(!e.target.value)return;if(wo.length&&!confirm('Muat kontrak lain dan kosongkan draft WO lokal?'))return;try{await loadMaster(e.target.value)}catch(err){status(err.message)}};
+$('#savedContracts').onchange=async e=>{
+ if(!e.target.value)return;
+ if(parsed.items.length&&!remoteContractId){
+  const contract=remoteContracts.find(c=>c.id===e.target.value);
+  if(!contract){status('Pilih kontrak terlebih dahulu.');return}
+  if(!confirm('Ikat import yang sedang ditinjau ke kontrak '+contract.number+' / Rev '+contract.revision+'? Item lama kontrak ini akan ditimpa saat Anda klik Update Master (item lama tidak dimuat ke sini).'))return;
+  remoteContractId=contract.id;
+  $('#contractBinding').textContent=contract.number+' · Rev '+contract.revision+' · siap di-update';
+  authUi();
+  status('Kontrak diikat. Klik "Update Master" untuk menimpa item lama dengan data import ini.');
+  return;
+ }
+ if(wo.length&&!confirm('Muat kontrak lain dan kosongkan draft WO lokal?'))return;
+ try{await loadMaster(e.target.value)}catch(err){status(err.message)}
+};
 $('#saveMaster').onclick=busy($('#saveMaster'),async()=>{if(!confirm('Simpan master sebagai kontrak/revisi baru di Supabase? Struktur kelompok sudah ditinjau?'))return;const result=await api('import_master',{projectCode:$('#projectCode').value,projectName:$('#projectName').value,contractNo:$('#contractNo').value,contractType:$('#contractType').value,revision:$('#revision').value,sourceFile:sourceName,sourceSheet:$('#sheet').value,items:parsed.items});remoteContractId=result.contractId;parsed.items.forEach(i=>{i.parentId=i.parentId?result.itemIds[i.parentId]:null;i.id=result.itemIds[i.id]});wo.forEach(i=>i.sourceId=result.itemIds[i.sourceId]);selected.clear();$('#contractBinding').textContent=$('#contractNo').value+' · tersimpan';renderMaster();status('Master tersimpan di Supabase. Harga pada WO akan disalin dari master ini.')});
 $('#updateMaster').onclick=busy($('#updateMaster'),async()=>{
  if(!confirm('Timpa item Master yang sudah tersimpan dengan data ini? Item lama yang kodenya gak ada lagi akan dihapus (kecuali masih dipakai WO -- itu ditinggal tanpa kelompok, gak dihapus). Ini gak bikin revisi baru.'))return;
