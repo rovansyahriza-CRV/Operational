@@ -3,26 +3,44 @@
 const text=v=>v==null?'':String(v).trim();
 function number(v,locale='en'){if(v==null||v==='')return null;if(typeof v==='number')return Number.isFinite(v)?v:NaN;let s=text(v).replace(/\s/g,'');s=locale==='id'?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');return /^[-+]?\d+(\.\d+)?$/.test(s)?Number(s):NaN;}
 function parse(rows,map,options={}){
- const result=[],issues=[],skipped=[],seen=new Set();let stack=[],rate='STANDARD',seq=0;
+ const result=[],issues=[],skipped=[],seen=new Set();let stack=[],rate='STANDARD',seq=0,lastLabel=null;
  const start=options.start??4;
+ const detailMode=map.detail>=0;
  for(let ri=start;ri<rows.length;ri++){
   const r=rows[ri]||[],get=k=>map[k]>=0?r[map[k]]:undefined;
-  let code=text(get('code')),description=text(get('description'));const unit=text(get('unit')),price=number(get('price'),options.locale),qty=number(get('qty'),options.locale),amount=number(get('amount'),options.locale);
-  if(!code&&!description&&!unit&&price===null)continue;
+  let code=text(get('code')),description=text(get('description')),unit=text(get('unit'));
+  const detail=detailMode?text(get('detail')):'',price=number(get('price'),options.locale),qty=number(get('qty'),options.locale),amount=number(get('amount'),options.locale);
+  if(!code&&!description&&!detail&&!unit&&price===null)continue;
+  if(detailMode&&description.toLowerCase()==='description'){skipped.push({row:ri+1,label:description});continue;}
   const label=description||code;
-  if(/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM)/i.test(label)||/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM)/i.test(code)){skipped.push({row:ri+1,label});continue;}
+  if(/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM|TOTAL\b)/i.test(label)||/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM|TOTAL\b)/i.test(code)){skipped.push({row:ri+1,label});continue;}
   const isGroup=price===null&&!unit&&qty===null;
   if(isGroup){
    let level;
+   const numDot=detailMode&&/^\d+\.\s/.test(label);
+   const letterDot=detailMode&&/^[A-Z]\.\s/.test(label);
    if(/^PAKET\s+PEKERJAAN/i.test(label)){level=0;rate='STANDARD';}
-   else{const m=label.match(/P-[IVX]+\.?\s*Unit\s+(\d+(?:\.\d+)*)/i);if(m){level=m[1].split('.').length;rate='STANDARD';}else{level=Math.max(1,...stack.filter(x=>x.explicit).map(x=>x.level+1));}}
-   const explicit=/^PAKET\s+PEKERJAAN|P-[IVX]+\.?\s*Unit/i.test(label);
+   else{
+    const m=label.match(/P-[IVX]+\.?\s*Unit\s+(\d+(?:\.\d+)*)/i);
+    if(m){level=m[1].split('.').length;rate='STANDARD';}
+    else if(numDot){level=0;rate='STANDARD';}
+    else if(letterDot){level=1;rate='STANDARD';}
+    else{level=Math.max(1,...stack.filter(x=>x.explicit).map(x=>x.level+1));}
+   }
+   const explicit=/^PAKET\s+PEKERJAAN|P-[IVX]+\.?\s*Unit/i.test(label)||numDot||letterDot;
    if(/standby/i.test(label))rate='STANDBY';else if(/tarif kerja/i.test(label))rate='WORKING';else if(!explicit)rate='STANDARD';
    while(stack.length&&stack.at(-1).level>=level)stack.pop();
    const item={id:'row-'+(ri+1),code:'GROUP-'+(++seq),description:label,rowKind:'GROUP',parentId:stack.at(-1)?.id||null,level,sourceRow:ri+1,explicit,unit:null,price:null,qty:null,rate};
-   result.push(item);stack.push(item);continue;
+   result.push(item);stack.push(item);lastLabel=null;continue;
   }
-  if(!code){code='ITEM-'+(ri+1);issues.push({row:ri+1,severity:'warning',message:'Kode dibuat otomatis: '+code});}
+  if(detailMode){
+   if(description)lastLabel=description;
+   const base=description||lastLabel||'';
+   description=detail?(base?base+' — '+detail:detail):base;
+  }
+  if(!unit&&options.defaultUnit)unit=text(options.defaultUnit);
+  if(detailMode){code='ITEM-'+(ri+1);}
+  else if(!code){code='ITEM-'+(ri+1);issues.push({row:ri+1,severity:'warning',message:'Kode dibuat otomatis: '+code});}
   if(seen.has(code))issues.push({row:ri+1,severity:'error',message:'Kode item duplikat: '+code});seen.add(code);
   if(!description)issues.push({row:ri+1,severity:'error',message:'Uraian item kosong'});
   if(!unit)issues.push({row:ri+1,severity:'error',message:'Satuan kosong'});
