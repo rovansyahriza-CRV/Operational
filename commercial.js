@@ -13,8 +13,9 @@ function parse(rows,map,options={}){
   if(!code&&!description&&!detail&&!unit&&price===null)continue;
   if(detailMode&&description.toLowerCase()==='description'){skipped.push({row:ri+1,label:description});continue;}
   const label=description||code;
-  if(/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM|TOTAL\b)/i.test(label)||/^(SUB\s*TOTAL|GRAND\s*TOTAL|PROVISION\s*SUM|TOTAL\b)/i.test(code)){skipped.push({row:ri+1,label});continue;}
-  const isGroup=price===null&&!unit&&qty===null;
+  if(/^(SUB\s*TOTAL|GRAND\s*TOTAL|TOTAL\b)/i.test(label)||/^(SUB\s*TOTAL|GRAND\s*TOTAL|TOTAL\b)/i.test(code)){skipped.push({row:ri+1,label});continue;}
+  const isProvisionSum=/^PROVISION\s*SUM/i.test(label)||/^PROVISION\s*SUM/i.test(code);
+  const isGroup=isProvisionSum||(price===null&&!unit&&qty===null);
   if(isGroup){
    let level;
    const numDot=detailMode&&/^\d+\.\s/.test(label);
@@ -27,7 +28,7 @@ function parse(rows,map,options={}){
     else if(letterDot){level=1;rate='STANDARD';}
     else{level=Math.max(1,...stack.filter(x=>x.explicit).map(x=>x.level+1));}
    }
-   const explicit=/^PAKET\s+PEKERJAAN|P-[IVX]+\.?\s*Unit/i.test(label)||numDot||letterDot;
+   const explicit=/^PAKET\s+PEKERJAAN|P-[IVX]+\.?\s*Unit/i.test(label)||numDot||letterDot||isProvisionSum;
    if(/standby/i.test(label))rate='STANDBY';else if(/tarif kerja/i.test(label))rate='WORKING';else if(!explicit)rate='STANDARD';
    while(stack.length&&stack.at(-1).level>=level)stack.pop();
    const item={id:'row-'+(ri+1),code:'GROUP-'+(++seq),description:label,rowKind:'GROUP',parentId:stack.at(-1)?.id||null,level,sourceRow:ri+1,explicit,unit:null,price:null,qty:null,rate};
