@@ -186,7 +186,7 @@ function renderProjects(){
  $('#projectCount').textContent=projectList.length;$('#activeProjectCount').textContent=projectList.filter(p=>p.state==='ACTIVE').length;
  const q=$('#projectSearch').value.toLowerCase();$('#projectCards').innerHTML=projectList.filter(p=>(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q)).map(p=>`<article class="project-card"><div class="toolbar"><span class="project-code">${escapeHtml(p.code)}</span><span class="tag">${escapeHtml(states[p.state]||p.state)}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.client||'Client belum diisi')}<br>${escapeHtml(p.location||'Lokasi belum diisi')}</p><p><strong>Kontrak:</strong> ${escapeHtml(p.contract||'Belum diisi')}<br><strong>Periode:</strong> ${escapeHtml(p.startDate||'—')} s/d ${escapeHtml(p.endDate||'—')}</p><div class="toolbar"><button data-project-open="${escapeHtml(p.id)}" class="primary">Buka master →</button><button data-project-edit="${escapeHtml(p.id)}">Edit</button></div></article>`).join('')||'<div class="empty project-card">Belum ada project yang cocok. Tambahkan identitas project untuk mulai menyusun master komersial.</div>';
  document.querySelectorAll('[data-project-edit]').forEach(b=>b.onclick=()=>editProject(b.dataset.projectEdit));
- document.querySelectorAll('[data-project-open]').forEach(b=>b.onclick=()=>{const p=projectList.find(p=>p.id===b.dataset.projectOpen);if(parsed.items.length||wo.length||remoteContractId){if($('#projectCode').value===p.code&&$('#projectName').value===p.name){tab('master');return;}status('Simpan draft yang sedang terbuka, lalu gunakan Master baru sebelum berpindah project.');return;}$('#projectCode').value=p.code;$('#projectName').value=p.name;$('#contractNo').value=p.contract||'';tab('master');status('Project dipilih. Isi kontrak lalu import master komersial.');loadProjectLocalMaster(p);});
+ document.querySelectorAll('[data-project-open]').forEach(b=>b.onclick=()=>{const p=projectList.find(p=>p.id===b.dataset.projectOpen);if(parsed.items.length||wo.length||remoteContractId){if($('#projectCode').value===p.code&&$('#projectName').value===p.name){tab('master');return;}if(!confirm('Ganti ke project "'+p.name+'"? Master/WO yang sedang terbuka dan belum disimpan akan direset.'))return;parsed={items:[],issues:[],skipped:[]};wo=[];sharedDraftMeta=null;selected.clear();collapsed.clear();resetBinding();}$('#projectCode').value=p.code;$('#projectName').value=p.name;$('#contractNo').value=p.contract||'';renderMaster();renderWo();tab('master');status('Project dipilih. Isi kontrak lalu import master komersial.');loadProjectLocalMaster(p);});
 }
 function editProject(id){const p=projectList.find(p=>p.id===id);editingProject=p?.id||null;$('#projectDialogTitle').textContent=p?'Edit project':'Project baru';for(const [field,key]of Object.entries({pCode:'code',pName:'name',pClient:'client',pLocation:'location',pContract:'contract',pStart:'startDate',pEnd:'endDate',pStatus:'state'}))$('#'+field).value=p?.[key]||(key==='state'?'ACTIVE':'');$('#projectError').textContent='';$('#projectDialog').showModal();}
 $('#addProject').onclick=()=>editProject();$('#closeProject').onclick=()=>$('#projectDialog').close();$('#projectSearch').oninput=renderProjects;
@@ -196,6 +196,7 @@ renderProjects();tab('projects');
 
 function renderProjectCodeOptions(){
  $('#projectCodeOptions').replaceChildren(...projectList.map(p=>new Option(p.name+' / '+(p.client||''),p.code)));
+ const pcInput=$('#projectCode');if(pcInput){pcInput.setAttribute('list','');pcInput.offsetHeight;pcInput.setAttribute('list','projectCodeOptions');}
  $('#projectCodeHint').textContent=projectList.length?'Ketik kode atau nama, lalu pilih project.':'Belum ada project. Tambahkan melalui Project List.';
 }
 let projectBeforeSearch=null;
@@ -205,7 +206,8 @@ $('#projectCode').addEventListener('change',()=>{
  const previous=projectBeforeSearch||{code:'',name:$('#projectName').value};
  if(!p){field.value=previous.code;status('Pilih kode yang tersedia di Project List. Tambahkan project baru dari menu Project List.');return;}
  if((parsed.items.length||wo.length||remoteContractId)&&(previous.code!==p.code||previous.name!==p.name)){
-  field.value=previous.code;status('Simpan draft lalu gunakan Master baru sebelum berpindah project.');return;
+  if(!confirm('Ganti ke project "'+p.name+'"? Master/WO yang sedang terbuka dan belum disimpan akan direset.')){field.value=previous.code;return;}
+  parsed={items:[],issues:[],skipped:[]};wo=[];sharedDraftMeta=null;selected.clear();collapsed.clear();resetBinding();renderMaster();renderWo();
  }
  field.value=p.code;$('#projectName').value=p.name;if(!parsed.items.length&&!wo.length&&!remoteContractId)$('#contractNo').value=p.contract||'';projectBeforeSearch={code:p.code,name:p.name};status('Project dipilih: '+p.name);loadProjectLocalMaster(p);
 });
