@@ -73,10 +73,20 @@ $('#mpLoadWos').onclick=busy($('#mpLoadWos'),async()=>{
  status(rows.length+' WO tersedia.');
 });
 $('#mpWo').addEventListener('change',async()=>{
- const has=!!$('#mpWo').value;
+ const woId=$('#mpWo').value,has=!!woId;
  resetManpowerForm();
  $('#mpMethodCard').hidden=!has;
- if(has)await refreshActiveList();
+ if(has){
+  await refreshActiveList();
+  // PIC/Foreman sudah login pakai username+password -- itu udah cukup buat identitas
+  // DIA SENDIRI, jadi begitu pilih WO langsung checkin_self (gak perlu scan diri sendiri).
+  // Best-effort & silent: kalau gagal (jaringan dsb) gak ganggu alur pilih WO.
+  try{
+   const result=await manpowerApi('checkin_self',{woId});
+   if(result.status==='ok'){status('Kamu ('+result.employeeName+') otomatis check-in di WO ini.');await refreshActiveList()}
+   else if(result.status==='elsewhere')status('Kamu masih check-in di WO lain -- check-out dulu kalau mau pindah.');
+  }catch(err){}
+ }
  else $('#mpActiveList').innerHTML='<p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p>';
 });
 
