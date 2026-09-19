@@ -252,7 +252,7 @@ async function openDetailDialog(smsItemId){
  $('#detailContext').textContent=item?(item.code+' — '+item.description+' ('+fmt(item.qty)+' '+item.unit+')'):'';
  $('#detailError').textContent='';
  $('#detailCategory').value='';$('#detailActivityName').value='';
- $('#detailItemDesc').value='';$('#detailItemUnit').value='';$('#detailItemQty').value='';
+ $('#detailItemDesc').value='';$('#detailItemUnit').value='';
  if(!dailyActivities.length)await loadActivities();
  currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId});
  renderDetailTree();
@@ -275,17 +275,16 @@ $('#addDetailGroup').onclick=busy($('#addDetailGroup'),async()=>{
 });
 
 $('#addDetailItem').onclick=busy($('#addDetailItem'),async()=>{
- const parentId=$('#detailParentGroup').value,description=$('#detailItemDesc').value.trim(),unit=$('#detailItemUnit').value.trim(),qty=Number($('#detailItemQty').value);
+ const parentId=$('#detailParentGroup').value,description=$('#detailItemDesc').value.trim(),unit=$('#detailItemUnit').value.trim();
  $('#detailError').textContent='';
  if(!parentId){$('#detailError').textContent='Pilih Group induk dulu.';return;}
  if(!description){$('#detailError').textContent='Isi uraian sub-item.';return;}
  if(!unit){$('#detailError').textContent='Isi satuan.';return;}
- if(!Number.isFinite(qty)||qty<=0){$('#detailError').textContent='Qty tidak valid.';return;}
  try{
-  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit,qty});
+  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit});
   currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId:currentDetailSmsItemId});
   renderDetailTree();
-  $('#detailItemDesc').value='';$('#detailItemUnit').value='';$('#detailItemQty').value='';
+  $('#detailItemDesc').value='';$('#detailItemUnit').value='';
  }catch(err){$('#detailError').textContent=err.message}
 });
 
@@ -303,7 +302,8 @@ async function renderProgressList(){
  const detail=currentDetailRows.find(r=>r.id===currentProgressDetailId);
  const done=rows.reduce((s,r)=>s+Number(r.qty),0);
  $('#progressRows').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.report_date)}</td><td class="num">${fmt(r.qty)}</td><td>${escapeHtml(r.notes||'')}</td><td>${escapeHtml(r.recorded_by_name||'')}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">Belum ada progress.</td></tr>';
- $('#progressDialogTitle').textContent='Progress: '+(detail?detail.description:'')+' ('+fmt(done)+'/'+(detail?fmt(detail.qty):'')+' '+(detail?.unit||'')+')';
+ const target=detail?.qty!=null?'/'+fmt(detail.qty):'';
+ $('#progressDialogTitle').textContent='Progress: '+(detail?detail.description:'')+' (total tercatat: '+fmt(done)+target+' '+(detail?.unit||'')+')';
 }
 async function openProgressDialog(detailId){
  currentProgressDetailId=detailId;
