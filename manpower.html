@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Team Check-in — BIMA SPMS</title>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <link rel="stylesheet" href="progress.css">
 </head>
 <body>
@@ -36,20 +38,47 @@
   <button id="mpLoadWos" type="button">Muat</button>
  </div>
 
- <label for="mpEmployeeSearch">Cari nama anggota tim</label>
- <input id="mpEmployeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama" disabled>
- <input id="mpEmployeeId" type="hidden">
- <p id="mpEmployeeStatus" role="status"></p>
- <div id="mpEmployeeSuggestions" hidden></div>
-
- <label for="mpPin">PIN anggota tim</label>
- <input id="mpPin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" disabled>
-
- <div class="field-row">
-  <button id="mpCheckIn" class="primary" type="button" disabled>Check In</button>
-  <button id="mpCheckOut" type="button" disabled>Check Out</button>
+ <div id="mpMethodCard" hidden>
+  <label>Identifikasi anggota tim</label>
+  <button id="mpMethodQr" type="button" class="primary">📷 Scan QR Code</button>
+  <button id="mpMethodFace" type="button" class="primary">📸 Scan Wajah</button>
+  <button id="mpMethodPin" type="button">⌨️ Input PIN (cari nama)</button>
  </div>
- <p id="mpActionError" role="alert"></p>
+
+ <div id="mpPinCard" hidden>
+  <label for="mpEmployeeSearch">Cari nama anggota tim</label>
+  <input id="mpEmployeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama">
+  <p id="mpEmployeeStatus" role="status"></p>
+  <div id="mpEmployeeSuggestions" hidden></div>
+  <button id="mpCancelMethod1" type="button">← Batal, pilih metode lain</button>
+ </div>
+
+ <div id="mpCamCard" hidden>
+  <p id="mpCamLabel" class="hint"></p>
+  <div id="mpCamWrap" style="position:relative;width:100%;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#0B0D10;margin-bottom:10px">
+   <video id="mpVideo" autoplay muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover"></video>
+   <canvas id="mpCanvas" style="display:none"></canvas>
+  </div>
+  <p id="mpCamStatus" role="status"></p>
+  <div class="field-row">
+   <button id="mpCamScan" type="button" class="primary">Scan Sekarang</button>
+   <button id="mpCamSwitch" type="button">🔄 Kamera</button>
+  </div>
+  <button id="mpCancelMethod2" type="button">← Batal, pilih metode lain</button>
+ </div>
+
+ <input id="mpEmployeeId" type="hidden">
+ <div id="mpIdentifiedCard" hidden>
+  <p id="mpIdentifiedName" class="hint"></p>
+  <label for="mpPin">PIN anggota tim</label>
+  <input id="mpPin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+  <div class="field-row">
+   <button id="mpCheckIn" class="primary" type="button">Check In</button>
+   <button id="mpCheckOut" type="button">Check Out</button>
+  </div>
+  <p id="mpActionError" role="alert"></p>
+  <button id="mpChangeIdentity" type="button">← Ganti orang / metode</button>
+ </div>
 
  <h2>Tim aktif di WO ini</h2>
  <div id="mpActiveList"><p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p></div>
