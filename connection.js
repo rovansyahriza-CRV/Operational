@@ -5,7 +5,7 @@ let opSession=null,remoteContractId=null,remoteWoId=null,remoteWoStatus=null,rem
 async function rpc(name,params){const response=await fetch(OP_CONFIG.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:OP_CONFIG.key,'Content-Type':'application/json'},body:JSON.stringify(params)});const body=await response.json().catch(()=>null);if(!response.ok)throw Error(body?.message||'Koneksi gagal ('+response.status+')');return body;}
 async function api(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_api',{p_token:opSession.token,p_action:action,p_data:data});}
 function hasPic(p){return !!opSession?.pic?.some(x=>['all',p.toLowerCase()].includes(String(x).trim().toLowerCase()))}
-function authUi(){const local=!opSession;$('#approveWo').disabled=remoteWoStatus!=='DRAFT';$('#identity').textContent=opSession?'Masuk: '+opSession.name:'Belum login';$('#logout').hidden=local;$('#loginOpen').hidden=!local;$('#saveMaster').disabled=!hasPic('Operational Master Komersial')||!parsed.items.length||parsed.issues.some(i=>i.severity==='error')||!!remoteContractId;$('#saveWo').disabled=!hasPic('Operational WO')||!remoteContractId||!!remoteWoId;$('#loadContracts').disabled=local||!(hasPic('Operational WO')||hasPic('Operational Master Komersial'));$('#loadWos').disabled=!hasPic('Operational WO');$('#approveWo').hidden=!remoteWoId||!hasPic('Operational WO')||!opSession?.author?.some(x=>['all','operational approval wo'].includes(String(x).trim().toLowerCase()));document.querySelector('[data-tab="master"]').hidden=!local&&!hasPic('Operational Master Komersial')&&!hasPic('Operational WO');document.querySelector('[data-tab="wo"]').hidden=!local&&!hasPic('Operational WO');$('#importToggle').hidden=!local&&!hasPic('Operational Master Komersial');if(!local&&!hasPic('Operational Master Komersial'))$('#importPanel').hidden=true;$('#addWo').hidden=!local&&!hasPic('Operational WO');if(remoteWoId)$('#addWo').disabled=true;$('#addItemToggle').hidden=local||!hasPic('Operational Master Komersial')||!remoteContractId;if($('#addItemToggle').hidden)$('#addItemPanel').hidden=true;$('#updateMaster').hidden=local||!hasPic('Operational Master Komersial')||!remoteContractId;$('#updateMaster').disabled=!parsed.items.length||parsed.issues.some(i=>i.severity==='error');$('#reviseWo').hidden=local||!hasPic('Operational WO')||!remoteWoId;$('#saveWo').textContent=revisingSourceWoId?'Simpan sebagai revisi baru':'Simpan WO ke Supabase';}
+function authUi(){const local=!opSession;$('#approveWo').disabled=remoteWoStatus!=='DRAFT';$('#identity').textContent=opSession?'Masuk: '+opSession.name:'Belum login';$('#logout').hidden=local;$('#loginOpen').hidden=!local;$('#saveMaster').disabled=!hasPic('Operational Master Komersial')||!parsed.items.length||parsed.issues.some(i=>i.severity==='error')||!!remoteContractId;$('#saveWo').disabled=!hasPic('Operational WO')||!remoteContractId||!!remoteWoId;$('#loadContracts').disabled=local||!(hasPic('Operational WO')||hasPic('Operational Master Komersial'));$('#loadWos').disabled=!hasPic('Operational WO');$('#approveWo').hidden=!remoteWoId||!hasPic('Operational WO')||!opSession?.author?.some(x=>['all','operational approval wo'].includes(String(x).trim().toLowerCase()));document.querySelector('[data-tab="master"]').hidden=!local&&!hasPic('Operational Master Komersial')&&!hasPic('Operational WO');document.querySelector('[data-tab="wo"]').hidden=!local&&!hasPic('Operational WO');document.querySelector('[data-tab="progress"]').hidden=!local&&!hasPic('Operational WO');$('#importToggle').hidden=!local&&!hasPic('Operational Master Komersial');if(!local&&!hasPic('Operational Master Komersial'))$('#importPanel').hidden=true;$('#addWo').hidden=!local&&!hasPic('Operational WO');if(remoteWoId)$('#addWo').disabled=true;$('#addItemToggle').hidden=local||!hasPic('Operational Master Komersial')||!remoteContractId;if($('#addItemToggle').hidden)$('#addItemPanel').hidden=true;$('#updateMaster').hidden=local||!hasPic('Operational Master Komersial')||!remoteContractId;$('#updateMaster').disabled=!parsed.items.length||parsed.issues.some(i=>i.severity==='error');$('#reviseWo').hidden=local||!hasPic('Operational WO')||!remoteWoId;$('#saveWo').textContent=revisingSourceWoId?'Simpan sebagai revisi baru':'Simpan WO ke Supabase';}
 function busy(button,fn){return async()=>{button.disabled=true;try{await fn()}catch(err){status(err.message)}finally{button.disabled=false;authUi()}}}
 const priorRenderMaster=renderMaster;renderMaster=function(){priorRenderMaster();if(remoteContractId)document.querySelectorAll('[data-parent]').forEach(el=>el.disabled=true);authUi()};const priorRenderWo=renderWo;renderWo=function(){priorRenderWo();authUi();document.querySelectorAll('[data-detail]').forEach(el=>{el.hidden=!currentSmsId;el.onclick=()=>openDetailDialog(el.dataset.detail)})};const priorTotal=total;total=function(){priorTotal();authUi()};
 function resetBinding(){remoteContractId=null;remoteWoId=null;$('#contractBinding').textContent='Master belum tersimpan';authUi()}
@@ -361,6 +361,46 @@ $('#addProgress').onclick=busy($('#addProgress'),async()=>{
  }catch(err){$('#progressError').textContent=err.message}
 });
 
+let batchDetails=[];
+function pathFor(rows,row){const names=[];let cur=row;while(cur){names.unshift(cur.description);cur=cur.parent_id?rows.find(r=>r.id===cur.parent_id):null}return names.join(' / ')}
+$('#progressLoadWos').onclick=busy($('#progressLoadWos'),async()=>{
+ const rows=await api('list_wo');
+ $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
+ status(rows.length+' WO tersedia.');
+});
+$('#progressWo').addEventListener('change',()=>{$('#progressLoadSms').disabled=!$('#progressWo').value;$('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;});
+$('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
+ const woId=$('#progressWo').value;if(!woId)return;
+ const rows=await api('list_sms',{woId});
+ $('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>'+rows.map(r=>`<option value="${r.id}">${escapeHtml(r.number+' Rev '+r.revision+' · '+r.status)}</option>`).join('');
+ status(rows.length+' SMS tersedia untuk WO ini.');
+});
+$('#progressSms').addEventListener('change',()=>{$('#progressLoadDetails').disabled=!$('#progressSms').value});
+$('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
+ const smsId=$('#progressSms').value;if(!smsId)return;
+ if(!$('#progressBatchDate').value)$('#progressBatchDate').value=new Date().toISOString().slice(0,10);
+ batchDetails=await dailyApi('list_sms_details',{smsId});
+ const leaves=batchDetails.filter(r=>r.row_kind==='ITEM');
+ $('#progressBatchRows').innerHTML=leaves.map(r=>`<tr><td><strong>${escapeHtml(r.item_code)}</strong> ${escapeHtml(r.item_description)}</td><td>${escapeHtml(pathFor(batchDetails,r))}</td><td>${escapeHtml(r.unit||'')}</td><td class="num">${r.qty!=null?fmt(r.qty):'—'}</td><td class="num">${fmt(r.progress_total)}</td><td><input type="number" min="0.000001" step="any" data-batch-qty="${r.id}" aria-label="Qty hari ini ${escapeHtml(r.description)}"></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Belum ada breakdown di SMS ini.</td></tr>';
+ $('#progressSaveAll').disabled=!leaves.length;
+ status(leaves.length+' sub-item tersedia buat diisi progress.');
+});
+$('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
+ const reportDate=$('#progressBatchDate').value;
+ if(!reportDate){status('Isi tanggal dulu.');return;}
+ const inputs=[...document.querySelectorAll('[data-batch-qty]')].filter(el=>el.value.trim()!=='');
+ if(!inputs.length){status('Belum ada qty yang diisi.');return;}
+ let ok=0,fail=0,firstError='';
+ for(const el of inputs){
+  const qty=Number(el.value);
+  if(!Number.isFinite(qty)||qty<=0){fail++;if(!firstError)firstError='Qty tidak valid pada salah satu baris.';continue;}
+  try{await dailyApi('save_progress',{detailId:el.dataset.batchQty,reportDate,qty});ok++;el.value='';}
+  catch(err){fail++;if(!firstError)firstError=err.message;}
+ }
+ await $('#progressLoadDetails').onclick();
+ status(`${ok} progress tersimpan${fail?', '+fail+' gagal ('+firstError+')':'.'}`);
+});
+
 document.querySelectorAll('[data-route]').forEach(e=>e.addEventListener('change',smsFeedback));
 $('#printSms').onclick=()=>{
  try{
@@ -472,7 +512,7 @@ function renderProjects(){
 function editProject(id){const p=projectList.find(p=>p.id===id);editingProject=p?.id||null;$('#projectDialogTitle').textContent=p?'Edit project':'Project baru';for(const [field,key,fallback]of [['pCode','code',''],['pName','name',''],['pClient','client',''],['pLocation','location',''],['pContract','contract',''],['pRevision','revision','01'],['pContractType','contractType','BLANKET_ORDER'],['pStart','startDate',''],['pEnd','endDate',''],['pStatus','state','ACTIVE']])$('#'+field).value=p?.[key]||fallback;$('#projectError').textContent='';$('#projectDialog').showModal();}
 $('#addProject').onclick=()=>editProject();$('#closeProject').onclick=()=>$('#projectDialog').close();$('#projectSearch').oninput=renderProjects;
 $('#projectForm').onsubmit=e=>{e.preventDefault();try{const p={id:editingProject||crypto.randomUUID(),code:$('#pCode').value.trim(),name:$('#pName').value.trim(),client:$('#pClient').value.trim(),location:$('#pLocation').value.trim(),contract:$('#pContract').value.trim(),revision:$('#pRevision').value.trim()||'01',contractType:$('#pContractType').value,startDate:$('#pStart').value,endDate:$('#pEnd').value,state:$('#pStatus').value};if(!p.code||!p.name)throw Error('Kode dan nama wajib diisi.');if((p.startDate&&!p.endDate)||(!p.startDate&&p.endDate))throw Error('Isi Start Date dan End Date untuk periode project.');if(p.startDate&&p.endDate<p.startDate)throw Error('End Date tidak boleh lebih awal dari Start Date.');if(projectList.some(x=>x.id!==p.id&&x.code.toLowerCase()===p.code.toLowerCase()))throw Error('Kode project sudah digunakan.');const next=editingProject?projectList.map(x=>x.id===p.id?p:x):[...projectList,p];localStorage.setItem(projectStorage,JSON.stringify(next));projectList=next;renderProjects();$('#projectDialog').close();status('Identitas project tersimpan di browser ini.');}catch(err){$('#projectError').textContent=err.message}};
-const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects';const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects')renderProjects();};
+const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects'||name==='progress';if($('#progress'))$('#progress').hidden=name!=='progress';const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.'],progress:['DAILY PROGRESS','Progress Harian','Catat qty selesai per sub-item breakdown, lintas semua item dalam satu SMS.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects')renderProjects();};
 renderProjects();tab('projects');
 
 function renderProjectCodeOptions(){
@@ -572,7 +612,7 @@ $('#employeeSearch').addEventListener('input',()=>{
 $('#loginDialog').addEventListener('close',()=>{clearTimeout(employeeSearchTimer);++employeeSearchVersion;$('#employeeSuggestions').hidden=true;$('#employeePassword').value='';});
 
 const renderAuthControls=authUi,openWorkspaceTab=tab;
-function canOpenPage(name){return !!opSession && (name==='wo'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'&&hasPic('Operational Master Komersial'));}
+function canOpenPage(name){return !!opSession && (name==='wo'?hasPic('Operational WO'):name==='progress'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'&&hasPic('Operational Master Komersial'));}
 tab=function(name){if(canOpenPage(name))openWorkspaceTab(name);};
 authUi=function(){
  renderAuthControls();const locked=!opSession;
