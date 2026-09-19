@@ -36,8 +36,12 @@ section h2{font-size:15px;margin:20px 0 10px}
 .photo-thumb{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
 .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .photo-thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;padding:0;line-height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;font-size:13px;cursor:pointer}
+.item-group{margin-bottom:8px}
+.ig-header{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.item-group .progress-card{margin-left:12px}
 .report-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
 .report-card .rc-weather{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg);color:var(--muted);margin-top:4px}
+.report-card .rc-entry{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
 .report-card .rc-photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .report-card .rc-photos img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
 #progressBackToEdit{width:100%;margin-top:10px}
