@@ -15,6 +15,7 @@ section{padding:16px;max-width:520px;margin:0 auto}
 .field-row{display:flex;gap:8px;margin-bottom:14px;align-items:flex-end}
 .field-row>div{flex:1}
 .field-row button{white-space:nowrap;flex-shrink:0}
+#progressSearch{margin-bottom:14px}
 #employeeSuggestions{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 #employeeSuggestions button{text-align:left;width:100%}
 #loginError{color:#ad321c;font-size:13px;min-height:18px}

@@ -61,6 +61,7 @@ $('#logout').onclick=async()=>{
  $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>';
  $('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressSms').disabled=true;
  $('#progressLoadSms').disabled=true;$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;
+ $('#progressSearch').value='';batchDetails=[];keptValues={};
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
  status('Sudah keluar.');
 };
@@ -87,20 +88,33 @@ $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  status(rows.length+' SMS tersedia untuk WO ini.');
 });
 $('#progressSms').addEventListener('change',()=>{$('#progressLoadDetails').disabled=!$('#progressSms').value});
-$('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
- const smsId=$('#progressSms').value;if(!smsId)return;
- if(!$('#progressBatchDate').value)$('#progressBatchDate').value=new Date().toISOString().slice(0,10);
- batchDetails=await dailyApi('list_sms_details',{smsId});
- const leaves=batchDetails.filter(r=>r.row_kind==='ITEM');
+let keptValues={};
+function renderBatchList(){
+ const query=$('#progressSearch').value.trim().toLowerCase();
+ document.querySelectorAll('[data-batch-qty]').forEach(el=>{if(el.value.trim()!=='')keptValues[el.dataset.batchQty]=el.value;else delete keptValues[el.dataset.batchQty]});
+ const allLeaves=batchDetails.filter(r=>r.row_kind==='ITEM');
+ const leaves=query?allLeaves.filter(r=>{
+  const haystack=(r.item_code+' '+r.item_description+' '+pathFor(batchDetails,r)).toLowerCase();
+  return haystack.includes(query);
+ }):allLeaves;
  $('#progressBatchList').innerHTML=leaves.map(r=>`<div class="progress-card">
   <div class="pc-item">${escapeHtml(r.item_code)} — ${escapeHtml(r.item_description)}</div>
   <div class="pc-path">${escapeHtml(pathFor(batchDetails,r))}</div>
   <div class="pc-meta">Satuan: ${escapeHtml(r.unit||'-')} &middot; Target: ${r.qty!=null?fmt(r.qty):'—'} &middot; Tercatat: ${fmt(r.progress_total)}</div>
   <label for="qty-${r.id}">Qty hari ini</label>
-  <input id="qty-${r.id}" type="number" min="0.000001" step="any" inputmode="decimal" data-batch-qty="${r.id}">
- </div>`).join('')||'<p class="empty">Belum ada breakdown di SMS ini.</p>';
- $('#progressSaveAll').disabled=!leaves.length;
- status(leaves.length+' sub-item tersedia buat diisi progress.');
+  <input id="qty-${r.id}" type="number" min="0.000001" step="any" inputmode="decimal" data-batch-qty="${r.id}" value="${escapeHtml(keptValues[r.id]||'')}">
+ </div>`).join('')||(query?'<p class="empty">Gak ada yang cocok dengan pencarian.</p>':'<p class="empty">Belum ada breakdown di SMS ini.</p>');
+ $('#progressSaveAll').disabled=!allLeaves.length;
+ return allLeaves.length;
+}
+$('#progressSearch').addEventListener('input',renderBatchList);
+$('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
+ const smsId=$('#progressSms').value;if(!smsId)return;
+ if(!$('#progressBatchDate').value)$('#progressBatchDate').value=new Date().toISOString().slice(0,10);
+ $('#progressSearch').value='';keptValues={};
+ batchDetails=await dailyApi('list_sms_details',{smsId});
+ const total=renderBatchList();
+ status(total+' sub-item tersedia buat diisi progress.');
 });
 $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
  const reportDate=$('#progressBatchDate').value;
