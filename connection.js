@@ -248,8 +248,11 @@ function activitySuggestionsFor(groupId){
 function renderDetailTree(){
  const rows=currentDetailRows,groups=rows.filter(r=>r.row_kind==='GROUP');
  const groupOptions='<option value="">Pilih group</option>'+groups.map(g=>`<option value="${g.id}">${escapeHtml(g.description)}</option>`).join('');
+ const prevParent=$('#detailParentGroup').value,prevJoint=$('#detailJointParent').value;
  $('#detailParentGroup').innerHTML=groupOptions;
  $('#detailJointParent').innerHTML=groupOptions;
+ if(groups.some(g=>g.id===prevParent))$('#detailParentGroup').value=prevParent;
+ if(groups.some(g=>g.id===prevJoint))$('#detailJointParent').value=prevJoint;
  $('#detailRows').innerHTML=rows.map(r=>`<tr><td>${r.row_kind==='GROUP'?'Group':'Item'}</td><td>${r.parent_id?'— ':''}${escapeHtml(r.description)}</td><td>${escapeHtml(r.unit||'')}</td><td class="num">${r.qty!=null?fmt(r.qty):''}</td><td>${r.row_kind==='ITEM'?`<button data-progress="${r.id}">Progress</button>`:''}</td><td><button data-delete-detail="${r.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Belum ada breakdown.</td></tr>';
  document.querySelectorAll('[data-delete-detail]').forEach(el=>el.onclick=()=>deleteDetailRow(el.dataset.deleteDetail));
  document.querySelectorAll('[data-progress]').forEach(el=>el.onclick=()=>openProgressDialog(el.dataset.progress));
@@ -268,7 +271,7 @@ async function openDetailDialog(smsItemId){
  $('#detailError').textContent='';
  $('#detailCategory').value='';$('#detailActivityName').value='';
  $('#detailJointName').value='';
- $('#detailItemDesc').value='';$('#detailItemUnit').value='';
+ $('#detailItemDesc').value='';$('#detailItemUnit').value='';$('#detailItemQty').value='';
  if(!dailyActivities.length)await loadActivities();
  currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId});
  renderDetailTree();
@@ -305,17 +308,19 @@ $('#addDetailJoint').onclick=busy($('#addDetailJoint'),async()=>{
 });
 
 $('#addDetailItem').onclick=busy($('#addDetailItem'),async()=>{
- const parentId=$('#detailParentGroup').value,description=$('#detailItemDesc').value.trim(),unit=$('#detailItemUnit').value.trim();
+ const parentId=$('#detailParentGroup').value,description=$('#detailItemDesc').value.trim(),unit=$('#detailItemUnit').value.trim(),qtyRaw=$('#detailItemQty').value.trim();
  $('#detailError').textContent='';
  if(!parentId){$('#detailError').textContent='Pilih Group induk dulu.';return;}
  if(!description){$('#detailError').textContent='Isi uraian sub-item.';return;}
  if(!unit){$('#detailError').textContent='Isi satuan.';return;}
+ const qty=qtyRaw?Number(qtyRaw):null;
+ if(qtyRaw&&(!Number.isFinite(qty)||qty<=0)){$('#detailError').textContent='Qty tidak valid.';return;}
  try{
   const match=activitySuggestionsFor(parentId).find(a=>a.name.toLowerCase()===description.toLowerCase());
-  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit,activityId:match?.id});
+  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit,qty,activityId:match?.id});
   currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId:currentDetailSmsItemId});
   renderDetailTree();
-  $('#detailItemDesc').value='';$('#detailItemUnit').value='';
+  $('#detailItemDesc').value='';$('#detailItemUnit').value='';$('#detailItemQty').value='';
  }catch(err){$('#detailError').textContent=err.message}
 });
 
