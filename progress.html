@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Daily Progress — BIMA SPMS</title>
+<link rel="stylesheet" href="progress.css">
+</head>
+<body>
+<header>
+ <h1>Daily Progress</h1>
+ <div class="header-right">
+  <span id="identity">Belum login</span>
+  <button id="logout" hidden>Keluar</button>
+ </div>
+</header>
+
+<section id="loginSection">
+ <form id="loginForm">
+  <p class="hint">Login pakai akun SMMS yang sama dengan aplikasi Operational.</p>
+  <label for="employeeSearch">Nama karyawan</label>
+  <input id="employeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama" required aria-describedby="employeeSearchStatus">
+  <input id="employeeId" type="hidden">
+  <p id="employeeSearchStatus" role="status"></p>
+  <div id="employeeSuggestions" hidden aria-label="Hasil pencarian karyawan"></div>
+  <label for="employeePassword">Password</label>
+  <input id="employeePassword" type="password" autocomplete="current-password" required>
+  <p id="loginError" role="alert"></p>
+  <button class="primary" id="loginSubmit" type="submit">Masuk</button>
+ </form>
+</section>
+
+<section id="progressSection" hidden>
+ <div class="field-row">
+  <div><label for="progressWo">WO</label><select id="progressWo"><option value="">Pilih WO tersimpan</option></select></div>
+  <button id="progressLoadWos" type="button">Muat</button>
+ </div>
+ <div class="field-row">
+  <div><label for="progressSms">SMS</label><select id="progressSms" disabled><option value="">Pilih SMS tersimpan</option></select></div>
+  <button id="progressLoadSms" type="button" disabled>Muat</button>
+ </div>
+ <div class="field-row">
+  <div><label for="progressBatchDate">Tanggal</label><input id="progressBatchDate" type="date"></div>
+  <button id="progressLoadDetails" type="button" disabled>Muat breakdown</button>
+ </div>
+ <div id="progressBatchList"><p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p></div>
+ <button id="progressSaveAll" class="primary" type="button" disabled>Simpan semua progress hari ini</button>
+</section>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script src="progress.js" defer></script>
+</body>
+</html>
