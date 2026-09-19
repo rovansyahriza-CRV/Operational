@@ -50,6 +50,20 @@ section h2{font-size:15px;margin:20px 0 10px}
 .mp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .mp-card .mp-name{font-weight:600}
 .mp-card .mp-time{font-size:12px;color:var(--muted)}
+.mp-class-group{margin-bottom:10px}
+.mp-class-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+#reportHeaderDetails{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+#reportHeaderDetails summary{cursor:pointer;font-weight:600;font-size:14px}
+#reportHeaderDetails label{margin-top:10px}
+#reportHeaderSave{width:100%;margin-top:12px}
+#reportHeaderStatus{font-size:13px;color:var(--muted);min-height:16px}
+.shift-block{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+.shift-block label{margin-top:6px}
+.shift-block label:first-child{margin-top:0}
+.report-card .rc-shifts{margin-top:8px;font-size:12px;color:var(--muted)}
+.report-card .rc-shifts div{padding:2px 0}
+.report-header-block{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;font-size:13px;line-height:1.6}
+.report-header-block strong{color:var(--text)}
 @media (prefers-color-scheme: dark){
  :root{--bg:#12161f;--card:#1c2230;--border:#333c4d;--text:#e8ecf3;--muted:#9aa4b5}
  header{background:#0b0f18}

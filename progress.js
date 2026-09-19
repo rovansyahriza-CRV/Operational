@@ -92,13 +92,29 @@ $('#logout').onclick=async()=>{
 // Manpower dan Daily Progress sama-sama di-scope ke WO+tanggal -- gak perlu foreign key baru,
 // tinggal query check-in yang jatuh di tanggal yang sama buat WO yang sama.
 function localDateOf(isoTimestamp){const d=new Date(isoTimestamp);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+let lastManpowerRows=[];
+function groupManpowerByKualifikasi(rows){
+ const map=new Map();
+ for(const r of rows){
+  const key=r.kualifikasi||'Tanpa klasifikasi';
+  if(!map.has(key))map.set(key,[]);
+  map.get(key).push(r);
+ }
+ return [...map.entries()].map(([kualifikasi,members])=>({kualifikasi,members})).sort((a,b)=>a.kualifikasi.localeCompare(b.kualifikasi));
+}
 async function refreshManpowerForDate(){
  const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ lastManpowerRows=[];
  if(!woId||!date){$('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';return}
  try{
   const rows=await manpowerApi('list_checkins',{woId});
   const dayRows=rows.filter(r=>localDateOf(r.check_in_at)===date);
-  $('#progressManpowerList').innerHTML=dayRows.length?dayRows.map(r=>`<div class="mp-card"><span class="mp-name">${escapeHtml(r.employee_name)}</span><span class="mp-time">${fmt(r.hours)} jam</span></div>`).join(''):'<p class="empty">Belum ada yang check-in di WO ini pada tanggal tsb.</p>';
+  lastManpowerRows=dayRows;
+  const groups=groupManpowerByKualifikasi(dayRows);
+  $('#progressManpowerList').innerHTML=groups.length?groups.map(g=>`<div class="mp-class-group">
+   <div class="mp-class-title">${escapeHtml(g.kualifikasi)} (${g.members.length})</div>
+   ${g.members.map(r=>`<div class="mp-card"><span class="mp-name">${escapeHtml(r.employee_name)}</span><span class="mp-time">${fmt(r.hours)} jam</span></div>`).join('')}
+  </div>`).join('')+`<p class="hint">Total ${dayRows.length} orang.</p>`:'<p class="empty">Belum ada yang check-in di WO ini pada tanggal tsb.</p>';
  }catch(err){$('#progressManpowerList').innerHTML='<p class="empty">Gagal memuat data manpower: '+escapeHtml(err.message)+'</p>'}
 }
 $('#progressBatchDate').addEventListener('change',async()=>{
@@ -115,11 +131,36 @@ $('#progressLoadWos').onclick=busy($('#progressLoadWos'),async()=>{
  $('#progressSms').disabled=true;$('#progressLoadSms').disabled=true;
  status(rows.length+' WO tersedia.');
 });
-$('#progressWo').addEventListener('change',()=>{
- $('#progressLoadSms').disabled=!$('#progressWo').value;
+$('#progressWo').addEventListener('change',async()=>{
+ const woId=$('#progressWo').value;
+ $('#progressLoadSms').disabled=!woId;
  $('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressSms').disabled=true;
  $('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;
+ $('#reportHeaderDetails').hidden=!woId;
+ if(woId)await loadReportHeader();
  refreshManpowerForDate();
+});
+
+// --- Detail Laporan (header proyek: Owner/Lokasi/Kontraktor/Konsultan/No.SPK) --
+// isi sekali per WO, disimpan ke Supabase (operational.projects lewat WO->contract->project).
+async function loadReportHeader(){
+ const woId=$('#progressWo').value;if(!woId)return;
+ $('#reportHeaderStatus').textContent='';
+ try{
+  const h=await dailyApi('get_report_header',{woId});
+  $('#rhClient').value=h.client||'';$('#rhLocation').value=h.location||'';
+  $('#rhContractor').value=h.contractorName||'';$('#rhConsultant').value=h.supervisorConsultant||'';
+  $('#rhContractNumber').value=h.contractNumber||'';$('#rhStart').value=h.startDate||'';$('#rhEnd').value=h.endDate||'';
+ }catch(err){$('#reportHeaderStatus').textContent='Gagal memuat: '+err.message}
+}
+$('#reportHeaderSave').onclick=busy($('#reportHeaderSave'),async()=>{
+ const woId=$('#progressWo').value;if(!woId){status('Pilih WO dulu.');return}
+ await dailyApi('save_report_header',{
+  woId,client:$('#rhClient').value.trim(),location:$('#rhLocation').value.trim(),
+  contractorName:$('#rhContractor').value.trim(),supervisorConsultant:$('#rhConsultant').value.trim(),
+  contractNumber:$('#rhContractNumber').value.trim(),startDate:$('#rhStart').value,endDate:$('#rhEnd').value
+ });
+ $('#reportHeaderStatus').textContent='Tersimpan.';
 });
 $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  const woId=$('#progressWo').value;if(!woId)return;
@@ -129,13 +170,21 @@ $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  status(rows.length+' SMS tersedia untuk WO ini.');
 });
 $('#progressSms').addEventListener('change',()=>{$('#progressLoadDetails').disabled=!$('#progressSms').value;$('#progressViewReport').disabled=true});
+const SHIFTS=['PAGI','SIANG','LEMBUR'];
+const SHIFT_LABELS={PAGI:'Pagi (08:00–12:00)',SIANG:'Siang (13:00–17:00)',LEMBUR:'Lembur (18:00–21:30)'};
 let keptValues={},itemWeather={},stagedPhotos={};
 function showEditMode(){$('#progressEditMode').hidden=false;$('#progressReportMode').hidden=true}
 async function loadItemWeather(){
  const smsId=$('#progressSms').value,date=$('#progressBatchDate').value;
  itemWeather={};
  if(!smsId||!date)return;
- try{const rows=await dailyApi('list_item_weather',{smsId,reportDate:date});rows.forEach(r=>{itemWeather[r.smsItemId]=r.weather})}catch(err){}
+ try{
+  const rows=await dailyApi('list_item_weather',{smsId,reportDate:date});
+  rows.forEach(r=>{
+   if(!itemWeather[r.smsItemId])itemWeather[r.smsItemId]={};
+   itemWeather[r.smsItemId][r.shift]={weather:r.weather,temperatureC:r.temperatureC,effectiveHours:r.effectiveHours};
+  });
+ }catch(err){}
 }
 function groupLeavesByItem(leaves){
  const map=new Map();
@@ -145,10 +194,30 @@ function groupLeavesByItem(leaves){
  }
  return [...map.values()];
 }
+function syncShiftInputsToState(){
+ document.querySelectorAll('[data-shift-weather]').forEach(el=>{
+  const [sid,shift]=el.dataset.shiftWeather.split(':');
+  if(!el.value)return;
+  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
+  itemWeather[sid][shift].weather=el.value;
+ });
+ document.querySelectorAll('[data-shift-temp]').forEach(el=>{
+  const [sid,shift]=el.dataset.shiftTemp.split(':');
+  if(el.value==='')return;
+  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
+  itemWeather[sid][shift].temperatureC=el.value;
+ });
+ document.querySelectorAll('[data-shift-hours]').forEach(el=>{
+  const [sid,shift]=el.dataset.shiftHours.split(':');
+  if(el.value==='')return;
+  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
+  itemWeather[sid][shift].effectiveHours=el.value;
+ });
+}
 function renderBatchList(){
  const query=$('#progressSearch').value.trim().toLowerCase();
  document.querySelectorAll('[data-batch-qty]').forEach(el=>{if(el.value.trim()!=='')keptValues[el.dataset.batchQty]=el.value;else delete keptValues[el.dataset.batchQty]});
- document.querySelectorAll('[data-item-weather]').forEach(el=>{if(el.value)itemWeather[el.dataset.itemWeather]=el.value;else delete itemWeather[el.dataset.itemWeather]});
+ syncShiftInputsToState();
  const allLeaves=batchDetails.filter(r=>r.row_kind==='ITEM');
  const leaves=query?allLeaves.filter(r=>{
   const haystack=(r.item_code+' '+r.item_description+' '+pathFor(batchDetails,r)).toLowerCase();
@@ -158,11 +227,21 @@ function renderBatchList(){
  $('#progressBatchList').innerHTML=groups.length?groups.map(g=>`<div class="item-group">
   <div class="ig-header">
    <div class="pc-item">${escapeHtml(g.item_code)} — ${escapeHtml(g.item_description)}</div>
-   <label for="itemweather-${g.sms_item_id}">Cuaca (berlaku buat semua sub-item di bawah, tanggal ini)</label>
-   <select id="itemweather-${g.sms_item_id}" data-item-weather="${g.sms_item_id}">
-    <option value="">- pilih -</option>
-    ${Object.entries(WEATHER_LABELS).map(([v,l])=>`<option value="${v}" ${itemWeather[g.sms_item_id]===v?'selected':''}>${l}</option>`).join('')}
-   </select>
+   <p class="hint">Cuaca per shift (berlaku buat semua sub-item di bawah, tanggal ini)</p>
+   ${SHIFTS.map(s=>{
+    const cur=(itemWeather[g.sms_item_id]||{})[s]||{};
+    return `<div class="shift-block">
+     <label>${SHIFT_LABELS[s]} — Cuaca</label>
+     <select data-shift-weather="${g.sms_item_id}:${s}">
+      <option value="">- pilih -</option>
+      ${Object.entries(WEATHER_LABELS).map(([v,l])=>`<option value="${v}" ${cur.weather===v?'selected':''}>${l}</option>`).join('')}
+     </select>
+     <div class="field-row">
+      <div><label>Suhu (°C)</label><input type="number" step="any" data-shift-temp="${g.sms_item_id}:${s}" value="${cur.temperatureC??''}"></div>
+      <div><label>Jam Efektif</label><input type="number" step="0.5" min="0" data-shift-hours="${g.sms_item_id}:${s}" value="${cur.effectiveHours??''}"></div>
+     </div>
+    </div>`;
+   }).join('')}
   </div>
   ${g.leaves.map(r=>`<div class="progress-card">
    <div class="pc-path">${escapeHtml(pathFor(batchDetails,r))}</div>
@@ -214,8 +293,8 @@ $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
  const reportDate=$('#progressBatchDate').value;
  if(!reportDate){status('Isi tanggal dulu.');return;}
  const inputs=[...document.querySelectorAll('[data-batch-qty]')].filter(el=>el.value.trim()!=='');
- const weatherSelects=[...document.querySelectorAll('[data-item-weather]')].filter(el=>el.value);
- if(!inputs.length&&!weatherSelects.length){status('Belum ada qty atau cuaca yang diisi.');return;}
+ const shiftWeatherEls=[...document.querySelectorAll('[data-shift-weather]')].filter(el=>el.value);
+ if(!inputs.length&&!shiftWeatherEls.length){status('Belum ada qty atau cuaca yang diisi.');return;}
  let ok=0,fail=0,photoFail=0,weatherFail=0,firstError='';
  for(const el of inputs){
   const detailId=el.dataset.batchQty;
@@ -232,37 +311,65 @@ $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
   }
   catch(err){fail++;if(!firstError)firstError=err.message}
  }
- for(const el of weatherSelects){
-  try{await dailyApi('save_item_weather',{smsItemId:el.dataset.itemWeather,reportDate,weather:el.value})}
+ for(const el of shiftWeatherEls){
+  const [smsItemId,shift]=el.dataset.shiftWeather.split(':');
+  const tempEl=document.querySelector('[data-shift-temp="'+smsItemId+':'+shift+'"]');
+  const hoursEl=document.querySelector('[data-shift-hours="'+smsItemId+':'+shift+'"]');
+  try{await dailyApi('save_item_weather',{smsItemId,reportDate,shift,weather:el.value,temperatureC:tempEl?tempEl.value:'',effectiveHours:hoursEl?hoursEl.value:''})}
   catch(err){weatherFail++}
  }
  await $('#progressLoadDetails').onclick();
  status(ok+' progress tersimpan'+(weatherFail?', '+weatherFail+' cuaca gagal disimpan':'')+(photoFail?', '+photoFail+' foto gagal upload':'')+(fail?', '+fail+' gagal ('+firstError+')':'.'));
 });
 
-// --- Daily Report (baca-saja): rekap per main group (sms_item, dengan cuacanya) + entri leaf
-// di bawahnya (qty digabung kalau ada >1 entri leaf yang sama di tanggal yang sama) ---
+// --- Daily Report (baca-saja): header proyek + tim per klasifikasi + rekap per main group
+// (sms_item, dengan cuaca 3-shift) + entri leaf di bawahnya (qty digabung kalau ada >1 entri
+// leaf yang sama di tanggal yang sama) ---
+function computeDayProgress(startDate,endDate,reportDate){
+ if(!startDate||!endDate)return null;
+ const ms=86400000,start=new Date(startDate+'T00:00:00'),end=new Date(endDate+'T00:00:00'),cur=new Date(reportDate+'T00:00:00');
+ return {dayNum:Math.round((cur-start)/ms)+1,total:Math.round((end-start)/ms)+1};
+}
+function shiftSummaryLine(s){return `${SHIFT_LABELS[s.shift]||s.shift}: ${escapeHtml(WEATHER_LABELS[s.weather]||s.weather)}`+(s.temperatureC!=null?` (${fmt(s.temperatureC)}°C)`:'')+(s.effectiveHours!=null?`, ${fmt(s.effectiveHours)} jam`:'')}
 let lastReportContext=null;
 $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
- const smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
+ const woId=$('#progressWo').value,smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
  if(!smsId||!reportDate){status('Pilih SMS dan tanggal dulu.');return}
- const groups=await dailyApi('read_daily_report',{smsId,reportDate});
+ const [groups,header]=await Promise.all([
+  dailyApi('read_daily_report',{smsId,reportDate}),
+  dailyApi('get_report_header',{woId}).catch(()=>null)
+ ]);
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
+ const manpowerGroups=groupManpowerByKualifikasi(lastManpowerRows);
+ const dayProgress=header?computeDayProgress(header.startDate,header.endDate,reportDate):null;
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups
+  reportDate,groups,header,manpowerGroups,dayProgress
  };
- $('#dailyReportView').innerHTML=groups.length?groups.map(g=>`<div class="report-card">
+ const headerHtml=`<div class="report-header-block">
+  <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
+  <div><strong>Lokasi:</strong> ${escapeHtml(header?.location||'-')}</div>
+  <div><strong>Pemilik Proyek:</strong> ${escapeHtml(header?.client||'-')}</div>
+  <div><strong>Kontraktor Pelaksana:</strong> ${escapeHtml(header?.contractorName||'-')}</div>
+  <div><strong>Konsultan Pengawas:</strong> ${escapeHtml(header?.supervisorConsultant||'-')}</div>
+  <div><strong>No. SPK/Kontrak:</strong> ${escapeHtml(header?.contractNumber||'-')}</div>
+  <div><strong>Hari ke:</strong> ${dayProgress?dayProgress.dayNum+' dari '+dayProgress.total+' hari':'-'}</div>
+ </div>`;
+ const manpowerHtml=manpowerGroups.length?`<div class="report-header-block">
+  <strong>Tenaga Kerja (Manpower) — Total ${lastManpowerRows.length} orang</strong>
+  ${manpowerGroups.map(g=>`<div>${escapeHtml(g.kualifikasi)}: ${g.members.length} orang</div>`).join('')}
+ </div>`:'';
+ $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
-   ${g.weather?`<span class="rc-weather">${escapeHtml(WEATHER_LABELS[g.weather]||g.weather)}</span>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
+   ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
     <div class="pc-path">${escapeHtml(e._path)}</div>
     <div class="pc-meta">Qty: ${fmt(e.qty)} ${escapeHtml(e.unit||'')} &middot; Oleh: ${escapeHtml(e.recordedByNames||'-')} &middot; update terakhir ${new Date(e.lastUpdatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div>
     ${e.notes?`<div class="pc-path">Catatan: ${escapeHtml(e.notes)}</div>`:''}
     ${e.photos&&e.photos.length?`<div class="rc-photos">${e.photos.map(p=>`<img src="data:${escapeHtml(p.mimeType)};base64,${p.photoData}" alt="Foto progress">`).join('')}</div>`:''}
    </div>`).join('')}
-  </div>`).join(''):'<p class="empty">Belum ada progress tercatat di tanggal ini.</p>';
+  </div>`).join(''):'<p class="empty">Belum ada progress tercatat di tanggal ini.</p>');
  $('#progressEditMode').hidden=true;$('#progressReportMode').hidden=false;
  $('#reportDriveStatus').textContent='';
  status('Daily Report '+reportDate+' dimuat.');
@@ -285,19 +392,35 @@ async function buildDailyReportDoc(){
  const pageWidth=doc.internal.pageSize.getWidth(),pageHeight=doc.internal.pageSize.getHeight();
  const margin=40;let y=margin;
  function ensureSpace(h){if(y+h>pageHeight-margin){doc.addPage();y=margin}}
- doc.setFontSize(16);doc.text('Daily Report — BIMA SPMS',margin,y);y+=22;
- doc.setFontSize(10);
- doc.text('WO: '+lastReportContext.woLabel,margin,y);y+=14;
- doc.text('SMS: '+lastReportContext.smsLabel,margin,y);y+=14;
- doc.text('Tanggal: '+lastReportContext.reportDate,margin,y);y+=18;
- doc.setDrawColor(200);doc.line(margin,y,pageWidth-margin,y);y+=16;
+ const h=lastReportContext.header,dp=lastReportContext.dayProgress;
+ doc.setFontSize(16);doc.text('Daily Report — BIMA SPMS',margin,y);y+=20;
+ doc.setFontSize(9);
+ doc.text('Pekerjaan: '+(h?.projectName||'-'),margin,y);y+=12;
+ doc.text('Lokasi: '+(h?.location||'-')+'   Pemilik Proyek: '+(h?.client||'-'),margin,y);y+=12;
+ doc.text('Kontraktor Pelaksana: '+(h?.contractorName||'-'),margin,y);y+=12;
+ doc.text('Konsultan Pengawas: '+(h?.supervisorConsultant||'-'),margin,y);y+=12;
+ doc.text('No. SPK/Kontrak: '+(h?.contractNumber||'-')+'   Hari ke: '+(dp?dp.dayNum+' dari '+dp.total+' hari':'-'),margin,y);y+=12;
+ doc.text('WO: '+lastReportContext.woLabel,margin,y);y+=12;
+ doc.text('SMS: '+lastReportContext.smsLabel,margin,y);y+=12;
+ doc.text('Tanggal: '+lastReportContext.reportDate,margin,y);y+=16;
+ doc.setDrawColor(200);doc.line(margin,y,pageWidth-margin,y);y+=14;
+ if(lastReportContext.manpowerGroups&&lastReportContext.manpowerGroups.length){
+  ensureSpace(16+lastReportContext.manpowerGroups.length*11);
+  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Tenaga Kerja (Manpower)',margin,y);y+=13;
+  doc.setFont(undefined,'normal');doc.setFontSize(9);
+  for(const g of lastReportContext.manpowerGroups){doc.text(g.kualifikasi+': '+g.members.length+' orang',margin+10,y);y+=11}
+  y+=6;doc.setDrawColor(230);doc.line(margin,y,pageWidth-margin,y);y+=14;
+ }
  if(!lastReportContext.groups.length){doc.text('Belum ada progress tercatat di tanggal ini.',margin,y)}
  for(const g of lastReportContext.groups){
-  ensureSpace(34);
+  ensureSpace(34+(g.weatherShifts?g.weatherShifts.length*11:0));
   doc.setFontSize(12);doc.setFont(undefined,'bold');
   doc.text(String(g.itemCode+' — '+g.itemDescription),margin,y);y+=14;
   doc.setFont(undefined,'normal');doc.setFontSize(9);
-  doc.text('Cuaca: '+(WEATHER_LABELS[g.weather]||'-'),margin,y);y+=16;
+  if(g.weatherShifts&&g.weatherShifts.length){
+   for(const s of g.weatherShifts){doc.text(shiftSummaryLine(s),margin,y);y+=11}
+   y+=4;
+  }else{doc.text('Cuaca belum diisi',margin,y);y+=12}
   for(const e of g.entries){
    ensureSpace(40);
    doc.setFontSize(10);doc.text('- '+e._path,margin+10,y);y+=12;
