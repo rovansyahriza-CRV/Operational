@@ -345,7 +345,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,dayProgress
+  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -384,62 +384,121 @@ $('#progressBackToEdit').onclick=showEditMode;
 const DRIVE_APPS_SCRIPT_URL=''; // TODO: isi URL Web App Apps Script setelah di-deploy (lihat drive-upload.gs)
 const DRIVE_SHARED_SECRET=''; // TODO: samain persis dengan SHARED_SECRET di Apps Script
 
+let logoDataUrlCache=null;
+async function loadLogoDataUrl(){
+ // Logo aslinya ~60KB (370x367 PNG interlaced) -- kegedean buat ditempel apa adanya ke tiap PDF
+ // (jsPDF gak recompress). Resize kecil dulu lewat canvas, size-nya jadi cuma beberapa KB.
+ if(logoDataUrlCache!==null)return logoDataUrlCache;
+ try{
+  const res=await fetch('logo.png');
+  if(!res.ok)throw Error('logo not found');
+  const blob=await res.blob();
+  const bitmapUrl=await new Promise((resolve,reject)=>{
+   const reader=new FileReader();
+   reader.onload=()=>resolve(reader.result);
+   reader.onerror=()=>reject(Error('Gagal baca logo.'));
+   reader.readAsDataURL(blob);
+  });
+  logoDataUrlCache=await new Promise((resolve,reject)=>{
+   const img=new Image();
+   img.onload=()=>{
+    const size=96,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
+    canvas.getContext('2d').drawImage(img,0,0,size,size);
+    resolve(canvas.toDataURL('image/png'));
+   };
+   img.onerror=()=>reject(Error('Gagal decode logo.'));
+   img.src=bitmapUrl;
+  });
+ }catch(err){logoDataUrlCache=''}
+ return logoDataUrlCache;
+}
 async function buildDailyReportDoc(){
  if(!lastReportContext)throw Error('Muat Daily Report dulu.');
  if(!window.jspdf)throw Error('Library PDF belum termuat, coba refresh halaman.');
  const {jsPDF}=window.jspdf;
  const doc=new jsPDF({unit:'pt',format:'a4'});
+ if(typeof doc.autoTable!=='function')throw Error('Library tabel PDF belum termuat, coba refresh halaman.');
  const pageWidth=doc.internal.pageSize.getWidth(),pageHeight=doc.internal.pageSize.getHeight();
- const margin=40;let y=margin;
- function ensureSpace(h){if(y+h>pageHeight-margin){doc.addPage();y=margin}}
+ const margin=40;
+ const gridStyles={fontSize:8,cellPadding:4,lineColor:[180,180,180],lineWidth:0.5};
+ const headStyles={fillColor:[36,52,99],textColor:255,fontStyle:'bold'};
  const h=lastReportContext.header,dp=lastReportContext.dayProgress;
- doc.setFontSize(16);doc.text('Daily Report — BIMA SPMS',margin,y);y+=20;
- doc.setFontSize(9);
- doc.text('Pekerjaan: '+(h?.projectName||'-'),margin,y);y+=12;
- doc.text('Lokasi: '+(h?.location||'-')+'   Pemilik Proyek: '+(h?.client||'-'),margin,y);y+=12;
- doc.text('Kontraktor Pelaksana: '+(h?.contractorName||'-'),margin,y);y+=12;
- doc.text('Konsultan Pengawas: '+(h?.supervisorConsultant||'-'),margin,y);y+=12;
- doc.text('No. SPK/Kontrak: '+(h?.contractNumber||'-')+'   Hari ke: '+(dp?dp.dayNum+' dari '+dp.total+' hari':'-'),margin,y);y+=12;
- doc.text('WO: '+lastReportContext.woLabel,margin,y);y+=12;
- doc.text('SMS: '+lastReportContext.smsLabel,margin,y);y+=12;
- doc.text('Tanggal: '+lastReportContext.reportDate,margin,y);y+=16;
- doc.setDrawColor(200);doc.line(margin,y,pageWidth-margin,y);y+=14;
+
+ const logoDataUrl=await loadLogoDataUrl();
+ const textX=logoDataUrl?margin+42:margin;
+ if(logoDataUrl){try{doc.addImage(logoDataUrl,'PNG',margin,margin-24,34,34)}catch(err){}}
+ doc.setFontSize(15);doc.setFont(undefined,'bold');doc.text('LAPORAN HARIAN PROYEK',textX,margin);
+ doc.setFontSize(9);doc.setFont(undefined,'normal');doc.text('DAILY CONSTRUCTION PROGRESS REPORT — BIMA SPMS',textX,margin+15);
+
+ doc.autoTable({
+  startY:margin+28,margin:{left:margin,right:margin},theme:'grid',styles:gridStyles,
+  columnStyles:{0:{fontStyle:'bold',cellWidth:120,fillColor:[245,246,250]},1:{cellWidth:'auto'}},
+  body:[
+   ['Nama Pekerjaan',h?.projectName||'-'],
+   ['Lokasi Proyek',h?.location||'-'],
+   ['Pemilik Proyek (Owner)',h?.client||'-'],
+   ['Kontraktor Pelaksana',h?.contractorName||'-'],
+   ['Konsultan Pengawas',h?.supervisorConsultant||'-'],
+   ['No. SPK / Kontrak',h?.contractNumber||'-'],
+   ['Hari ke',dp?dp.dayNum+' dari '+dp.total+' hari':'-'],
+   ['WO / SMS',lastReportContext.woLabel+' / '+lastReportContext.smsLabel],
+   ['Tanggal',lastReportContext.reportDate]
+  ]
+ });
+ let y=doc.lastAutoTable.finalY+18;
+
  if(lastReportContext.manpowerGroups&&lastReportContext.manpowerGroups.length){
-  ensureSpace(16+lastReportContext.manpowerGroups.length*11);
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Tenaga Kerja (Manpower)',margin,y);y+=13;
-  doc.setFont(undefined,'normal');doc.setFontSize(9);
-  for(const g of lastReportContext.manpowerGroups){doc.text(g.kualifikasi+': '+g.members.length+' orang',margin+10,y);y+=11}
-  y+=6;doc.setDrawColor(230);doc.line(margin,y,pageWidth-margin,y);y+=14;
+  if(y>pageHeight-100){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('TENAGA KERJA (MANPOWER)',margin,y);
+  doc.autoTable({
+   startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:gridStyles,headStyles,
+   head:[['Klasifikasi / Posisi','Jumlah Hadir']],
+   body:lastReportContext.manpowerGroups.map(g=>[g.kualifikasi,g.members.length+' Org']),
+   foot:[['TOTAL',lastReportContext.manpowerTotal+' Org']],
+   footStyles:{fillColor:[245,246,250],textColor:[20,20,20],fontStyle:'bold'}
+  });
+  y=doc.lastAutoTable.finalY+18;
  }
- if(!lastReportContext.groups.length){doc.text('Belum ada progress tercatat di tanggal ini.',margin,y)}
+
+ if(!lastReportContext.groups.length){
+  doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text('Belum ada progress tercatat di tanggal ini.',margin,y);
+ }
  for(const g of lastReportContext.groups){
-  ensureSpace(34+(g.weatherShifts?g.weatherShifts.length*11:0));
-  doc.setFontSize(12);doc.setFont(undefined,'bold');
-  doc.text(String(g.itemCode+' — '+g.itemDescription),margin,y);y+=14;
-  doc.setFont(undefined,'normal');doc.setFontSize(9);
+  if(y>pageHeight-120){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');
+  doc.text(String(g.itemCode+' — '+g.itemDescription),margin,y);
+  y+=8;
+
   if(g.weatherShifts&&g.weatherShifts.length){
-   for(const s of g.weatherShifts){doc.text(shiftSummaryLine(s),margin,y);y+=11}
-   y+=4;
-  }else{doc.text('Cuaca belum diisi',margin,y);y+=12}
-  for(const e of g.entries){
-   ensureSpace(40);
-   doc.setFontSize(10);doc.text('- '+e._path,margin+10,y);y+=12;
-   doc.setFontSize(9);
-   doc.text('Qty: '+fmt(e.qty)+' '+(e.unit||'')+'   Oleh: '+(e.recordedByNames||'-'),margin+10,y);y+=12;
-   if(e.notes){doc.text('Catatan: '+e.notes,margin+10,y);y+=12}
-   if(e.photos&&e.photos.length){
-    const imgSize=80;let x=margin+10;
-    ensureSpace(imgSize+10);
-    for(const p of e.photos){
-     if(x+imgSize>pageWidth-margin){x=margin+10;y+=imgSize+10;ensureSpace(imgSize+10)}
-     try{doc.addImage('data:'+p.mimeType+';base64,'+p.photoData,'JPEG',x,y,imgSize,imgSize)}catch(err){}
-     x+=imgSize+10;
-    }
-    y+=imgSize+14;
-   }
-   y+=4;
+   doc.autoTable({
+    startY:y+6,margin:{left:margin,right:margin},theme:'grid',styles:gridStyles,headStyles,
+    head:[['Shift','Kondisi Cuaca','Suhu (°C)','Jam Efektif']],
+    body:g.weatherShifts.map(s=>[SHIFT_LABELS[s.shift]||s.shift,WEATHER_LABELS[s.weather]||s.weather,s.temperatureC!=null?fmt(s.temperatureC):'-',s.effectiveHours!=null?fmt(s.effectiveHours)+' Jam':'-'])
+   });
+   y=doc.lastAutoTable.finalY+10;
   }
-  y+=6;doc.setDrawColor(230);doc.line(margin,y,pageWidth-margin,y);y+=14;
+
+  doc.autoTable({
+   startY:y,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},
+   headStyles:{fillColor:[217,49,46],textColor:255,fontStyle:'bold'},
+   head:[['Uraian / Breakdown','Qty','Satuan','Oleh','Update Terakhir','Catatan']],
+   body:g.entries.map(e=>[e._path,fmt(e.qty),e.unit||'-',e.recordedByNames||'-',new Date(e.lastUpdatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}),e.notes||'-'])
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // Foto ditaruh di luar tabel (bukan di dalam cell) -- lebih simpel & tetep kebaca rapi
+  const photosFlat=g.entries.flatMap(e=>e.photos||[]);
+  if(photosFlat.length){
+   const imgSize=80;let x=margin;
+   if(y+imgSize+10>pageHeight-margin){doc.addPage();y=margin}
+   for(const p of photosFlat){
+    if(x+imgSize>pageWidth-margin){x=margin;y+=imgSize+10;if(y+imgSize+10>pageHeight-margin){doc.addPage();y=margin}}
+    try{doc.addImage('data:'+p.mimeType+';base64,'+p.photoData,'JPEG',x,y,imgSize,imgSize)}catch(err){}
+    x+=imgSize+10;
+   }
+   y+=imgSize+14;
+  }
+  y+=10;
  }
  return doc;
 }
