@@ -231,20 +231,35 @@ let dailyActivities=[],currentDetailSmsItemId=null,currentDetailRows=[],currentP
 
 async function loadActivities(){
  dailyActivities=await dailyApi('list_activities');
- $('#activityCategoryOptions').innerHTML=[...new Set(dailyActivities.map(a=>a.category))].map(c=>`<option value="${escapeHtml(c)}">`).join('');
+ $('#activityCategoryOptions').innerHTML=dailyActivities.filter(a=>!a.parent_id).map(a=>`<option value="${escapeHtml(a.name)}">`).join('');
 }
 $('#detailCategory').addEventListener('input',()=>{
  const cat=$('#detailCategory').value.trim().toLowerCase();
- $('#activityNameOptions').innerHTML=dailyActivities.filter(a=>a.category.toLowerCase()===cat).map(a=>`<option value="${escapeHtml(a.name)}">`).join('');
+ const catRow=dailyActivities.find(a=>!a.parent_id&&a.name.toLowerCase()===cat);
+ $('#activityNameOptions').innerHTML=catRow?dailyActivities.filter(a=>a.parent_id===catRow.id).map(a=>`<option value="${escapeHtml(a.name)}">`).join(''):'';
 });
+function activitySuggestionsFor(groupId){
+ let g=currentDetailRows.find(r=>r.id===groupId);
+ while(g&&!g.activity_id)g=currentDetailRows.find(r=>r.id===g.parent_id);
+ if(!g)return[];
+ return dailyActivities.filter(a=>a.parent_id===g.activity_id);
+}
 
 function renderDetailTree(){
  const rows=currentDetailRows,groups=rows.filter(r=>r.row_kind==='GROUP');
- $('#detailParentGroup').innerHTML='<option value="">Pilih group</option>'+groups.map(g=>`<option value="${g.id}">${escapeHtml(g.description)}</option>`).join('');
+ const groupOptions='<option value="">Pilih group</option>'+groups.map(g=>`<option value="${g.id}">${escapeHtml(g.description)}</option>`).join('');
+ $('#detailParentGroup').innerHTML=groupOptions;
+ $('#detailJointParent').innerHTML=groupOptions;
  $('#detailRows').innerHTML=rows.map(r=>`<tr><td>${r.row_kind==='GROUP'?'Group':'Item'}</td><td>${r.parent_id?'— ':''}${escapeHtml(r.description)}</td><td>${escapeHtml(r.unit||'')}</td><td class="num">${r.qty!=null?fmt(r.qty):''}</td><td>${r.row_kind==='ITEM'?`<button data-progress="${r.id}">Progress</button>`:''}</td><td><button data-delete-detail="${r.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Belum ada breakdown.</td></tr>';
  document.querySelectorAll('[data-delete-detail]').forEach(el=>el.onclick=()=>deleteDetailRow(el.dataset.deleteDetail));
  document.querySelectorAll('[data-progress]').forEach(el=>el.onclick=()=>openProgressDialog(el.dataset.progress));
+ refreshTreatmentOptions();
 }
+function refreshTreatmentOptions(){
+ const parentId=$('#detailParentGroup').value;
+ $('#detailTreatmentOptions').innerHTML=parentId?activitySuggestionsFor(parentId).map(a=>`<option value="${escapeHtml(a.name)}">`).join(''):'';
+}
+$('#detailParentGroup').addEventListener('change',refreshTreatmentOptions);
 
 async function openDetailDialog(smsItemId){
  currentDetailSmsItemId=smsItemId;
@@ -252,6 +267,7 @@ async function openDetailDialog(smsItemId){
  $('#detailContext').textContent=item?(item.code+' — '+item.description+' ('+fmt(item.qty)+' '+item.unit+')'):'';
  $('#detailError').textContent='';
  $('#detailCategory').value='';$('#detailActivityName').value='';
+ $('#detailJointName').value='';
  $('#detailItemDesc').value='';$('#detailItemUnit').value='';
  if(!dailyActivities.length)await loadActivities();
  currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId});
@@ -265,12 +281,26 @@ $('#addDetailGroup').onclick=busy($('#addDetailGroup'),async()=>{
  $('#detailError').textContent='';
  if(!category||!name){$('#detailError').textContent='Isi kategori dan nama aktivitas.';return;}
  try{
-  const act=await dailyApi('add_activity',{category,name});
+  const catAct=await dailyApi('add_activity',{name:category});
+  const act=await dailyApi('add_activity',{parentId:catAct.id,name});
   await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'GROUP',activityId:act.id,description:name});
   await loadActivities();
   currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId:currentDetailSmsItemId});
   renderDetailTree();
   $('#detailCategory').value='';$('#detailActivityName').value='';
+ }catch(err){$('#detailError').textContent=err.message}
+});
+
+$('#addDetailJoint').onclick=busy($('#addDetailJoint'),async()=>{
+ const parentId=$('#detailJointParent').value,name=$('#detailJointName').value.trim();
+ $('#detailError').textContent='';
+ if(!parentId){$('#detailError').textContent='Pilih Group induk dulu.';return;}
+ if(!name){$('#detailError').textContent='Isi nama joint/instance.';return;}
+ try{
+  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'GROUP',parentId,description:name});
+  currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId:currentDetailSmsItemId});
+  renderDetailTree();
+  $('#detailJointName').value='';
  }catch(err){$('#detailError').textContent=err.message}
 });
 
@@ -281,7 +311,8 @@ $('#addDetailItem').onclick=busy($('#addDetailItem'),async()=>{
  if(!description){$('#detailError').textContent='Isi uraian sub-item.';return;}
  if(!unit){$('#detailError').textContent='Isi satuan.';return;}
  try{
-  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit});
+  const match=activitySuggestionsFor(parentId).find(a=>a.name.toLowerCase()===description.toLowerCase());
+  await dailyApi('add_detail_row',{smsItemId:currentDetailSmsItemId,rowKind:'ITEM',parentId,description,unit,activityId:match?.id});
   currentDetailRows=await dailyApi('read_sms_item_details',{smsItemId:currentDetailSmsItemId});
   renderDetailTree();
   $('#detailItemDesc').value='';$('#detailItemUnit').value='';
