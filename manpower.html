@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Team Check-in — BIMA SPMS</title>
+<link rel="stylesheet" href="progress.css">
+</head>
+<body>
+<header>
+ <h1>Team Check-in</h1>
+ <div class="header-right">
+  <span id="identity">Belum login</span>
+  <button id="logout" hidden>Keluar</button>
+ </div>
+</header>
+
+<section id="loginSection">
+ <form id="loginForm">
+  <p class="hint">Login PIC/Foreman pakai akun SMMS yang sama dengan aplikasi Operational.</p>
+  <label for="employeeSearch">Nama karyawan (akun kamu)</label>
+  <input id="employeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama" required aria-describedby="employeeSearchStatus">
+  <input id="employeeId" type="hidden">
+  <p id="employeeSearchStatus" role="status"></p>
+  <div id="employeeSuggestions" hidden aria-label="Hasil pencarian karyawan"></div>
+  <label for="employeePassword">Password</label>
+  <input id="employeePassword" type="password" autocomplete="current-password" required>
+  <p id="loginError" role="alert"></p>
+  <button class="primary" id="loginSubmit" type="submit">Masuk</button>
+ </form>
+</section>
+
+<section id="manpowerSection" hidden>
+ <div class="field-row">
+  <div><label for="mpWo">WO</label><select id="mpWo"><option value="">Pilih WO tersimpan</option></select></div>
+  <button id="mpLoadWos" type="button">Muat</button>
+ </div>
+
+ <label for="mpEmployeeSearch">Cari nama anggota tim</label>
+ <input id="mpEmployeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama" disabled>
+ <input id="mpEmployeeId" type="hidden">
+ <p id="mpEmployeeStatus" role="status"></p>
+ <div id="mpEmployeeSuggestions" hidden></div>
+
+ <label for="mpPin">PIN anggota tim</label>
+ <input id="mpPin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" disabled>
+
+ <div class="field-row">
+  <button id="mpCheckIn" class="primary" type="button" disabled>Check In</button>
+  <button id="mpCheckOut" type="button" disabled>Check Out</button>
+ </div>
+ <p id="mpActionError" role="alert"></p>
+
+ <h2>Tim aktif di WO ini</h2>
+ <div id="mpActiveList"><p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p></div>
+</section>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script src="manpower.js" defer></script>
+</body>
+</html>
