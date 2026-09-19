@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Daily Progress — BIMA SPMS</title>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="progress.css">
 </head>
 <body>
@@ -60,6 +61,9 @@
  <div id="progressReportMode" hidden>
   <h2>Daily Report</h2>
   <div id="dailyReportView"></div>
+  <button id="reportDownloadPdf" type="button" class="primary">💾 Download PDF</button>
+  <button id="reportUploadDrive" type="button">☁️ Upload ke Google Drive</button>
+  <p id="reportDriveStatus" role="status"></p>
   <button id="progressBackToEdit" type="button">← Kembali isi progress</button>
  </div>
 </section>

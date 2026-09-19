@@ -215,23 +215,91 @@ $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
 });
 
 // --- Daily Report (baca-saja): rekap qty+cuaca+foto per sub-item, buat SMS+tanggal ini ---
+let lastReportContext=null;
 $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  const smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
  if(!smsId||!reportDate){status('Pilih SMS dan tanggal dulu.');return}
  const rows=await dailyApi('read_daily_report',{smsId,reportDate});
- $('#dailyReportView').innerHTML=rows.length?rows.map(r=>{
-  const detail=batchDetails.find(d=>d.id===r.detail_id);
-  const path=detail?pathFor(batchDetails,detail):r.description;
-  return `<div class="report-card">
+ rows.forEach(r=>{const detail=batchDetails.find(d=>d.id===r.detail_id);r._path=detail?pathFor(batchDetails,detail):r.description});
+ lastReportContext={
+  woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
+  smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
+  reportDate,rows
+ };
+ $('#dailyReportView').innerHTML=rows.length?rows.map(r=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(r.item_code)} — ${escapeHtml(r.item_description)}</div>
-   <div class="pc-path">${escapeHtml(path)}</div>
+   <div class="pc-path">${escapeHtml(r._path)}</div>
    <div class="pc-meta">Qty: ${fmt(r.qty)} ${escapeHtml(r.unit||'')} &middot; Oleh: ${escapeHtml(r.recorded_by_name||'-')} &middot; ${new Date(r.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div>
    ${r.weather?`<span class="rc-weather">${escapeHtml(WEATHER_LABELS[r.weather]||r.weather)}</span>`:''}
    ${r.notes?`<div class="pc-path">Catatan: ${escapeHtml(r.notes)}</div>`:''}
    ${r.photos&&r.photos.length?`<div class="rc-photos">${r.photos.map(p=>`<img src="data:${escapeHtml(p.mimeType)};base64,${p.photoData}" alt="Foto progress">`).join('')}</div>`:''}
-  </div>`;
- }).join(''):'<p class="empty">Belum ada progress tercatat di tanggal ini.</p>';
+  </div>`).join(''):'<p class="empty">Belum ada progress tercatat di tanggal ini.</p>';
  $('#progressEditMode').hidden=true;$('#progressReportMode').hidden=false;
+ $('#reportDriveStatus').textContent='';
  status('Daily Report '+reportDate+' dimuat.');
 });
 $('#progressBackToEdit').onclick=showEditMode;
+
+// --- Export PDF (client-side, jsPDF) + upload ke Google Drive lewat Apps Script ---
+// Kenapa Apps Script bukan panggil Google Drive API langsung dari sini: upload ke Drive
+// butuh kredensial (service account/OAuth) yang gak boleh nempel di kode client-side statis
+// kaya GitHub Pages ini. Apps Script Web App jalan pakai identitas akun Google yang deploy,
+// polanya sama kaya APPS_SCRIPT_URL yang udah dipakai Fusion4 (attendance.html).
+const DRIVE_APPS_SCRIPT_URL=''; // TODO: isi URL Web App Apps Script setelah di-deploy (lihat drive-upload.gs)
+const DRIVE_SHARED_SECRET=''; // TODO: samain persis dengan SHARED_SECRET di Apps Script
+
+async function buildDailyReportDoc(){
+ if(!lastReportContext)throw Error('Muat Daily Report dulu.');
+ if(!window.jspdf)throw Error('Library PDF belum termuat, coba refresh halaman.');
+ const {jsPDF}=window.jspdf;
+ const doc=new jsPDF({unit:'pt',format:'a4'});
+ const pageWidth=doc.internal.pageSize.getWidth(),pageHeight=doc.internal.pageSize.getHeight();
+ const margin=40;let y=margin;
+ function ensureSpace(h){if(y+h>pageHeight-margin){doc.addPage();y=margin}}
+ doc.setFontSize(16);doc.text('Daily Report — BIMA SPMS',margin,y);y+=22;
+ doc.setFontSize(10);
+ doc.text('WO: '+lastReportContext.woLabel,margin,y);y+=14;
+ doc.text('SMS: '+lastReportContext.smsLabel,margin,y);y+=14;
+ doc.text('Tanggal: '+lastReportContext.reportDate,margin,y);y+=18;
+ doc.setDrawColor(200);doc.line(margin,y,pageWidth-margin,y);y+=16;
+ if(!lastReportContext.rows.length){doc.text('Belum ada progress tercatat di tanggal ini.',margin,y)}
+ for(const r of lastReportContext.rows){
+  ensureSpace(50);
+  doc.setFontSize(11);doc.setFont(undefined,'bold');
+  doc.text(String(r.item_code+' — '+r.item_description),margin,y);y+=14;
+  doc.setFont(undefined,'normal');doc.setFontSize(9);
+  doc.text('Breakdown: '+r._path,margin,y);y+=12;
+  doc.text('Qty: '+fmt(r.qty)+' '+(r.unit||'')+'   Cuaca: '+(WEATHER_LABELS[r.weather]||'-')+'   Oleh: '+(r.recorded_by_name||'-'),margin,y);y+=12;
+  if(r.notes){doc.text('Catatan: '+r.notes,margin,y);y+=12}
+  if(r.photos&&r.photos.length){
+   const imgSize=90;let x=margin;
+   ensureSpace(imgSize+10);
+   for(const p of r.photos){
+    if(x+imgSize>pageWidth-margin){x=margin;y+=imgSize+10;ensureSpace(imgSize+10)}
+    try{doc.addImage('data:'+p.mimeType+';base64,'+p.photoData,'JPEG',x,y,imgSize,imgSize)}catch(e){}
+    x+=imgSize+10;
+   }
+   y+=imgSize+14;
+  }
+  y+=6;doc.setDrawColor(230);doc.line(margin,y,pageWidth-margin,y);y+=14;
+ }
+ return doc;
+}
+function reportFileName(){return 'DailyReport_'+lastReportContext.woLabel.replace(/[^\w-]+/g,'_')+'_'+lastReportContext.reportDate+'.pdf'}
+
+$('#reportDownloadPdf').onclick=busy($('#reportDownloadPdf'),async()=>{
+ const doc=await buildDailyReportDoc();
+ doc.save(reportFileName());
+});
+$('#reportUploadDrive').onclick=busy($('#reportUploadDrive'),async()=>{
+ $('#reportDriveStatus').textContent='';
+ if(!DRIVE_APPS_SCRIPT_URL){$('#reportDriveStatus').textContent='Belum dikonfigurasi -- deploy drive-upload.gs dulu, lalu isi DRIVE_APPS_SCRIPT_URL di progress.js.';return}
+ $('#reportDriveStatus').textContent='Membuat PDF...';
+ const doc=await buildDailyReportDoc();
+ const base64=doc.output('datauristring').split(',')[1];
+ $('#reportDriveStatus').textContent='Mengunggah ke Google Drive...';
+ const res=await fetch(DRIVE_APPS_SCRIPT_URL,{method:'POST',body:JSON.stringify({secret:DRIVE_SHARED_SECRET,fileName:reportFileName(),pdfBase64:base64}),headers:{'Content-Type':'text/plain'}});
+ const body=await res.json().catch(()=>null);
+ if(!body||body.status!=='ok')throw Error(body?.message||'Upload ke Drive gagal.');
+ $('#reportDriveStatus').textContent='Tersimpan di Drive: '+body.url;
+});
