@@ -80,58 +80,64 @@ $('#mpWo').addEventListener('change',async()=>{
  else $('#mpActiveList').innerHTML='<p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p>';
 });
 
+// --- Mode: Check In / Check Out (dipilih dulu, sebelum identifikasi) ---
+let mpMode='checkin';
+function setMode(mode){
+ mpMode=mode;
+ $('#mpModeIn').className=mode==='checkin'?'primary':'';
+ $('#mpModeOut').className=mode==='checkout'?'primary':'';
+}
+$('#mpModeIn').onclick=()=>setMode('checkin');
+$('#mpModeOut').onclick=()=>setMode('checkout');
+
 function showOnly(id){
- for(const x of ['mpMethodCard','mpPinCard','mpCamCard','mpIdentifiedCard'])$('#'+x).hidden=(x!==id);
+ for(const x of ['mpMethodCard','mpPinCard','mpCamCard'])$('#'+x).hidden=(x!==id);
 }
 
 function resetManpowerForm(){
  stopMpCamera();
- $('#mpEmployeeSearch').value='';$('#mpEmployeeId').value='';
- $('#mpEmployeeSuggestions').hidden=true;$('#mpEmployeeSuggestions').replaceChildren();
- $('#mpEmployeeStatus').textContent='';
- $('#mpPin').value='';
- $('#mpActionError').textContent='';
+ $('#mpPinInput').value='';$('#mpPinStatus').textContent='';
  $('#mpCamStatus').textContent='';
- $('#mpMethodCard').hidden=true;$('#mpPinCard').hidden=true;$('#mpCamCard').hidden=true;$('#mpIdentifiedCard').hidden=true;
+ $('#mpMethodCard').hidden=true;$('#mpPinCard').hidden=true;$('#mpCamCard').hidden=true;
  if($('#mpWo').value)$('#mpMethodCard').hidden=false;
 }
 
-function setIdentified(id,name){
- $('#mpEmployeeId').value=String(id);
- $('#mpIdentifiedName').textContent='Dipilih: '+name+'. Minta anggota tim masukkan PIN sendiri.';
- stopMpCamera();
- showOnly('mpIdentifiedCard');
- $('#mpPin').value='';$('#mpPin').focus();
+function showResult(ok,text){
+ $('#mpResult').textContent=(ok?'✅ ':'❌ ')+text;
+ $('#mpResult').style.color=ok?'var(--success)':'var(--danger)';
 }
 
-$('#mpChangeIdentity').onclick=()=>{$('#mpEmployeeId').value='';showOnly('mpMethodCard')};
-$('#mpMethodPin').onclick=()=>showOnly('mpPinCard');
+// Satu titik eksekusi buat ketiga metode -- begitu identitas didapat (QR/wajah/PIN),
+// langsung checkin/checkout, TIDAK ada langkah minta PIN lagi sesudahnya.
+async function performByQrCode(qr){
+ const woId=$('#mpWo').value;
+ const action=mpMode==='checkin'?'checkin_by_qrcode':'checkout_by_qrcode';
+ const data=mpMode==='checkin'?{woId,qrCode:qr}:{qrCode:qr};
+ const result=await manpowerApi(action,data);
+ return result.employeeName;
+}
+async function performByPin(pin){
+ const woId=$('#mpWo').value;
+ const action=mpMode==='checkin'?'checkin_by_pin':'checkout_by_pin';
+ const data=mpMode==='checkin'?{woId,pin}:{pin};
+ const result=await manpowerApi(action,data);
+ return result.employeeName;
+}
+
+$('#mpMethodPin').onclick=()=>{showOnly('mpPinCard');$('#mpPinLabel').textContent=mpMode==='checkin'?'Anggota tim ketik PIN sendiri untuk Check In.':'Anggota tim ketik PIN sendiri untuk Check Out.';$('#mpPinInput').value='';$('#mpPinStatus').textContent='';$('#mpPinInput').focus()};
 $('#mpCancelMethod1').onclick=()=>showOnly('mpMethodCard');
 $('#mpCancelMethod2').onclick=()=>{stopMpCamera();showOnly('mpMethodCard')};
 
-// --- Cari anggota tim (metode: Input PIN / cari nama) ---
-let mpSearchTimer,mpSearchVersion=0;
-$('#mpEmployeeSearch').addEventListener('input',()=>{
- clearTimeout(mpSearchTimer);const version=++mpSearchVersion,query=$('#mpEmployeeSearch').value.trim();
- $('#mpEmployeeSuggestions').replaceChildren();$('#mpEmployeeSuggestions').hidden=true;
- $('#mpEmployeeStatus').textContent=query.length<2?'Ketik minimal 2 huruf nama.':'Mencari karyawan...';
- if(query.length<2)return;
- mpSearchTimer=setTimeout(async()=>{
-  try{
-   const rows=await rpc('search_active_karyawan',{p_query:query});
-   if(version!==mpSearchVersion)return;
-   const matches=Array.isArray(rows)?rows.slice(0,8):[];
-   $('#mpEmployeeStatus').textContent=matches.length?'Pilih nama yang sesuai.':'Nama tidak ditemukan.';
-   for(const row of matches){
-    if(!/^\d+$/.test(String(row.id))||typeof row.nama!=='string')continue;
-    const button=document.createElement('button');
-    button.type='button';button.textContent=row.nama+' (ID: '+row.id+')';
-    button.onclick=()=>{++mpSearchVersion;setIdentified(row.id,row.nama)};
-    $('#mpEmployeeSuggestions').append(button);
-   }
-   $('#mpEmployeeSuggestions').hidden=!$('#mpEmployeeSuggestions').children.length;
-  }catch(err){if(version===mpSearchVersion)$('#mpEmployeeStatus').textContent='Pencarian gagal. Ketik ulang untuk mencoba lagi.'}
- },300);
+$('#mpPinSubmit').onclick=busy($('#mpPinSubmit'),async()=>{
+ const pin=$('#mpPinInput').value.trim();
+ $('#mpPinStatus').textContent='';
+ if(!/^\d+$/.test(pin)){$('#mpPinStatus').textContent='PIN harus angka.';return}
+ try{
+  const name=await performByPin(pin);
+  showResult(true,name+' berhasil '+(mpMode==='checkin'?'check-in':'check-out')+'.');
+  resetManpowerForm();
+  await refreshActiveList();
+ }catch(err){$('#mpPinStatus').textContent=err.message}
 });
 
 // --- Kamera bersama (metode: Scan QR Code / Scan Wajah) ---
@@ -154,8 +160,10 @@ $('#mpCamSwitch').onclick=async()=>{
 };
 
 async function resolveByQrCode(qr){
- const result=await manpowerApi('find_by_qrcode',{qrCode:qr});
- setIdentified(result.employeeId,result.name);
+ const name=await performByQrCode(qr);
+ showResult(true,name+' berhasil '+(mpMode==='checkin'?'check-in':'check-out')+'.');
+ resetManpowerForm();
+ await refreshActiveList();
 }
 
 // --- Metode: Scan QR Code ---
@@ -242,28 +250,3 @@ async function refreshActiveList(){
  $('#mpActiveList').innerHTML=rows.map(r=>`<div class="mp-card"><span class="mp-name">${escapeHtml(r.employee_name)}</span><span class="mp-time">Masuk ${new Date(r.check_in_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')||'<p class="empty">Belum ada yang check-in di WO ini.</p>';
 }
 
-$('#mpCheckIn').onclick=busy($('#mpCheckIn'),async()=>{
- const woId=$('#mpWo').value,employeeId=$('#mpEmployeeId').value,pin=$('#mpPin').value.trim();
- $('#mpActionError').textContent='';
- if(!woId){$('#mpActionError').textContent='Pilih WO dulu.';return}
- if(!employeeId){$('#mpActionError').textContent='Pilih anggota tim dulu.';return}
- if(!/^\d+$/.test(pin)){$('#mpActionError').textContent='PIN harus angka.';return}
- try{
-  const result=await manpowerApi('checkin',{woId,employeeId,pin});
-  status(result.employeeName+' berhasil check-in.');
-  resetManpowerForm();
-  await refreshActiveList();
- }catch(err){$('#mpActionError').textContent=err.message}
-});
-$('#mpCheckOut').onclick=busy($('#mpCheckOut'),async()=>{
- const employeeId=$('#mpEmployeeId').value,pin=$('#mpPin').value.trim();
- $('#mpActionError').textContent='';
- if(!employeeId){$('#mpActionError').textContent='Pilih anggota tim dulu.';return}
- if(!/^\d+$/.test(pin)){$('#mpActionError').textContent='PIN harus angka.';return}
- try{
-  const result=await manpowerApi('checkout',{employeeId,pin});
-  status(result.employeeName+' berhasil check-out.');
-  resetManpowerForm();
-  await refreshActiveList();
- }catch(err){$('#mpActionError').textContent=err.message}
-});

@@ -39,17 +39,23 @@
  </div>
 
  <div id="mpMethodCard" hidden>
-  <label>Identifikasi anggota tim</label>
+  <label>Mode</label>
+  <div class="field-row" style="margin-bottom:16px">
+   <button id="mpModeIn" type="button" class="primary">🟢 Check In</button>
+   <button id="mpModeOut" type="button">🔴 Check Out</button>
+  </div>
+  <label>Identifikasi anggota tim (langsung tercatat, tanpa PIN lagi)</label>
   <button id="mpMethodQr" type="button" class="primary">📷 Scan QR Code</button>
   <button id="mpMethodFace" type="button" class="primary">📸 Scan Wajah</button>
-  <button id="mpMethodPin" type="button">⌨️ Input PIN (cari nama)</button>
+  <button id="mpMethodPin" type="button">⌨️ Input PIN</button>
  </div>
 
  <div id="mpPinCard" hidden>
-  <label for="mpEmployeeSearch">Cari nama anggota tim</label>
-  <input id="mpEmployeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama">
-  <p id="mpEmployeeStatus" role="status"></p>
-  <div id="mpEmployeeSuggestions" hidden></div>
+  <p id="mpPinLabel" class="hint"></p>
+  <label for="mpPinInput">PIN anggota tim</label>
+  <input id="mpPinInput" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="12">
+  <button id="mpPinSubmit" type="button" class="primary">Konfirmasi</button>
+  <p id="mpPinStatus" role="alert"></p>
   <button id="mpCancelMethod1" type="button">← Batal, pilih metode lain</button>
  </div>
 
@@ -67,18 +73,7 @@
   <button id="mpCancelMethod2" type="button">← Batal, pilih metode lain</button>
  </div>
 
- <input id="mpEmployeeId" type="hidden">
- <div id="mpIdentifiedCard" hidden>
-  <p id="mpIdentifiedName" class="hint"></p>
-  <label for="mpPin">PIN anggota tim</label>
-  <input id="mpPin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-  <div class="field-row">
-   <button id="mpCheckIn" class="primary" type="button">Check In</button>
-   <button id="mpCheckOut" type="button">Check Out</button>
-  </div>
-  <p id="mpActionError" role="alert"></p>
-  <button id="mpChangeIdentity" type="button">← Ganti orang / metode</button>
- </div>
+ <p id="mpResult" role="status"></p>
 
  <h2>Tim aktif di WO ini</h2>
  <div id="mpActiveList"><p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p></div>
