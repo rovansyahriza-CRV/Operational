@@ -9,6 +9,7 @@ function status(s){$('#status').textContent=s}
 async function rpc(name,params){const response=await fetch(OP_CONFIG.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:OP_CONFIG.key,'Content-Type':'application/json'},body:JSON.stringify(params)});const body=await response.json().catch(()=>null);if(!response.ok)throw Error(body?.message||'Koneksi gagal ('+response.status+')');return body}
 async function api(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_api',{p_token:opSession.token,p_action:action,p_data:data})}
 async function dailyApi(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_daily_report',{p_token:opSession.token,p_action:action,p_data:data})}
+async function manpowerApi(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_manpower',{p_token:opSession.token,p_action:action,p_data:data})}
 function busy(button,fn){return async()=>{button.disabled=true;try{await fn()}catch(err){status(err.message)}finally{button.disabled=false}}}
 
 let employeeSearchTimer,employeeSearchVersion=0;
@@ -63,8 +64,23 @@ $('#logout').onclick=async()=>{
  $('#progressLoadSms').disabled=true;$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;
  $('#progressSearch').value='';batchDetails=[];keptValues={};
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
+ $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
  status('Sudah keluar.');
 };
+
+// Manpower dan Daily Progress sama-sama di-scope ke WO+tanggal -- gak perlu foreign key baru,
+// tinggal query check-in yang jatuh di tanggal yang sama buat WO yang sama.
+function localDateOf(isoTimestamp){const d=new Date(isoTimestamp);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+async function refreshManpowerForDate(){
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ if(!woId||!date){$('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';return}
+ try{
+  const rows=await manpowerApi('list_checkins',{woId});
+  const dayRows=rows.filter(r=>localDateOf(r.check_in_at)===date);
+  $('#progressManpowerList').innerHTML=dayRows.length?dayRows.map(r=>`<div class="mp-card"><span class="mp-name">${escapeHtml(r.employee_name)}</span><span class="mp-time">${fmt(r.hours)} jam</span></div>`).join(''):'<p class="empty">Belum ada yang check-in di WO ini pada tanggal tsb.</p>';
+ }catch(err){$('#progressManpowerList').innerHTML='<p class="empty">Gagal memuat data manpower: '+escapeHtml(err.message)+'</p>'}
+}
+$('#progressBatchDate').addEventListener('change',refreshManpowerForDate);
 
 let batchDetails=[];
 function pathFor(rows,row){const names=[];let cur=row;while(cur){names.unshift(cur.description);cur=cur.parent_id?rows.find(r=>r.id===cur.parent_id):null}return names.join(' / ')}
@@ -79,6 +95,7 @@ $('#progressWo').addEventListener('change',()=>{
  $('#progressLoadSms').disabled=!$('#progressWo').value;
  $('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressSms').disabled=true;
  $('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;
+ refreshManpowerForDate();
 });
 $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  const woId=$('#progressWo').value;if(!woId)return;
@@ -114,6 +131,7 @@ $('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
  $('#progressSearch').value='';keptValues={};
  batchDetails=await dailyApi('list_sms_details',{smsId});
  const total=renderBatchList();
+ await refreshManpowerForDate();
  status(total+' sub-item tersedia buat diisi progress.');
 });
 $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
