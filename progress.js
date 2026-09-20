@@ -335,9 +335,10 @@ let lastReportContext=null;
 $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  const woId=$('#progressWo').value,smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
  if(!smsId||!reportDate){status('Pilih SMS dan tanggal dulu.');return}
- const [groups,header]=await Promise.all([
+ const [groups,header,materials]=await Promise.all([
   dailyApi('read_daily_report',{smsId,reportDate}),
-  dailyApi('get_report_header',{woId}).catch(()=>null)
+  dailyApi('get_report_header',{woId}).catch(()=>null),
+  dailyApi('list_material_received',{woId,reportDate}).catch(()=>[])
  ]);
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
  const manpowerGroups=groupManpowerByKualifikasi(lastManpowerRows);
@@ -345,7 +346,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress
+  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -360,7 +361,11 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   <strong>Tenaga Kerja (Manpower) — Total ${lastManpowerRows.length} orang</strong>
   ${manpowerGroups.map(g=>`<div>${escapeHtml(g.kualifikasi)}: ${g.members.length} orang</div>`).join('')}
  </div>`:'';
- $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+(groups.length?groups.map(g=>`<div class="report-card">
+ const materialHtml=materials&&materials.length?`<div class="report-header-block">
+  <strong>Material Diterima End User</strong>
+  ${materials.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; diserahkan ${escapeHtml(m.issuedByName||'-')} ke ${escapeHtml(m.confirmedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
+ </div>`:'';
+ $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
    ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
@@ -456,6 +461,17 @@ async function buildDailyReportDoc(){
    body:lastReportContext.manpowerGroups.map(g=>[g.kualifikasi,g.members.length+' Org']),
    foot:[['TOTAL',lastReportContext.manpowerTotal+' Org']],
    footStyles:{fillColor:[245,246,250],textColor:[20,20,20],fontStyle:'bold'}
+  });
+  y=doc.lastAutoTable.finalY+18;
+ }
+
+ if(lastReportContext.materials&&lastReportContext.materials.length){
+  if(y>pageHeight-100){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL DITERIMA END USER',margin,y);
+  doc.autoTable({
+   startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
+   head:[['Item','Qty','Satuan','Diserahkan','Diterima','Catatan']],
+   body:lastReportContext.materials.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.issuedByName||'-',m.confirmedByName||'-',m.notes||'-'])
   });
   y=doc.lastAutoTable.finalY+18;
  }
