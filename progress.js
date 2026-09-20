@@ -85,6 +85,7 @@ $('#logout').onclick=async()=>{
  $('#progressSearch').value='';batchDetails=[];keptValues={};itemWeather={};stagedPhotos={};
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
  $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
+ $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
  showEditMode();
  status('Sudah keluar.');
 };
@@ -117,8 +118,25 @@ async function refreshManpowerForDate(){
   </div>`).join('')+`<p class="hint">Total ${dayRows.length} orang.</p>`:'<p class="empty">Belum ada yang check-in di WO ini pada tanggal tsb.</p>';
  }catch(err){$('#progressManpowerList').innerHTML='<p class="empty">Gagal memuat data manpower: '+escapeHtml(err.message)+'</p>'}
 }
+
+// Material End User Receiving juga di-scope ke WO+tanggal (lewat endUserReceiving.woID +
+// ConfirmedDate) -- ditampilkan langsung di halaman input, konsisten kayak Manpower, bukan
+// cuma di Daily Report. lastMaterialRows dipakai ulang pas bikin Daily Report/PDF biar gak
+// nembak query 2x.
+let lastMaterialRows=[];
+async function refreshMaterialForDate(){
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ lastMaterialRows=[];
+ if(!woId||!date){$('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';return}
+ try{
+  const rows=await dailyApi('list_material_received',{woId,reportDate:date});
+  lastMaterialRows=rows;
+  $('#progressMaterialList').innerHTML=rows.length?rows.map(m=>`<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.issuedByName||'-')} → ${escapeHtml(m.confirmedByName||'-')}</span></div>`).join(''):'<p class="empty">Belum ada material yang diserahkan di WO ini pada tanggal tsb.</p>';
+ }catch(err){$('#progressMaterialList').innerHTML='<p class="empty">Gagal memuat data material: '+escapeHtml(err.message)+'</p>'}
+}
 $('#progressBatchDate').addEventListener('change',async()=>{
  await refreshManpowerForDate();
+ await refreshMaterialForDate();
  if(batchDetails.length){await loadItemWeather();renderBatchList()}
 });
 
@@ -139,6 +157,7 @@ $('#progressWo').addEventListener('change',async()=>{
  $('#reportHeaderDetails').hidden=!woId;
  if(woId)await loadReportHeader();
  refreshManpowerForDate();
+ refreshMaterialForDate();
 });
 
 // --- Detail Laporan (header proyek: Owner/Lokasi/Kontraktor/Konsultan/No.SPK) --
@@ -286,6 +305,7 @@ $('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
  await loadItemWeather();
  const total=renderBatchList();
  await refreshManpowerForDate();
+ await refreshMaterialForDate();
  $('#progressViewReport').disabled=false;
  status(total+' sub-item tersedia buat diisi progress.');
 });
@@ -335,11 +355,11 @@ let lastReportContext=null;
 $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  const woId=$('#progressWo').value,smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
  if(!smsId||!reportDate){status('Pilih SMS dan tanggal dulu.');return}
- const [groups,header,materials]=await Promise.all([
+ const [groups,header]=await Promise.all([
   dailyApi('read_daily_report',{smsId,reportDate}),
-  dailyApi('get_report_header',{woId}).catch(()=>null),
-  dailyApi('list_material_received',{woId,reportDate}).catch(()=>[])
+  dailyApi('get_report_header',{woId}).catch(()=>null)
  ]);
+ const materials=lastMaterialRows;
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
  const manpowerGroups=groupManpowerByKualifikasi(lastManpowerRows);
  const dayProgress=header?computeDayProgress(header.startDate,header.endDate,reportDate):null;
