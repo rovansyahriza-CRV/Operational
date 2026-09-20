@@ -52,6 +52,17 @@ section h2{font-size:15px;margin:20px 0 10px}
 .mp-card .mp-time{font-size:12px;color:var(--muted)}
 .mp-class-group{margin-bottom:10px}
 .mp-class-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.mu-subheading{font-size:13px;font-weight:600;color:var(--muted);margin:16px 0 8px}
+.mu-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.mu-card .mu-name{font-weight:600;margin-bottom:10px}
+.mu-stats{display:flex;gap:8px;margin-bottom:10px}
+.mu-stat{flex:1;background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.mu-stat-label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+.mu-stat-value{display:block;font-size:15px;font-weight:700;margin-top:2px}
+.mu-stat-balance .mu-stat-value{color:var(--primary)}
+.mu-input-row{display:flex;gap:8px}
+.mu-input-row input{flex:1}
+.mu-input-row button{white-space:nowrap;flex-shrink:0}
 #reportHeaderDetails{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
 #reportHeaderDetails summary{cursor:pointer;font-weight:600;font-size:14px}
 #reportHeaderDetails label{margin-top:10px}

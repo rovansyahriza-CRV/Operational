@@ -87,8 +87,7 @@ $('#logout').onclick=async()=>{
  $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
  $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
  $('#progressMaterialUsageList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p>';
- $('#materialUsageItem').innerHTML='<option value="">Pilih WO dulu</option>';$('#materialUsageItem').disabled=true;
- $('#materialUsageQty').value='';$('#materialUsageQty').disabled=true;$('#btnSaveMaterialUsage').disabled=true;
+ $('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';
  $('#materialUsageStatus').textContent='';materialBalanceRows=[];lastMaterialUsageRows=[];
  showEditMode();
  status('Sudah keluar.');
@@ -142,23 +141,48 @@ async function refreshMaterialForDate(){
 // (material bisa dipakai berhari-hari), sedangkan histori pemakaian di-scope ke WO+tanggal
 // kayak manpower/material diterima.
 let materialBalanceRows=[];
-function renderMaterialUsageItemOptions(){
- const sel=$('#materialUsageItem');
- sel.innerHTML='<option value="">Pilih item</option>'+materialBalanceRows.map(m=>`<option value="${m.confirmationId}">${escapeHtml(m.itemDescription)} — sisa ${fmt(m.balance)} ${escapeHtml(m.unit||'')}</option>`).join('');
+function renderMaterialUsageCards(){
+ $('#materialUsageCards').innerHTML=materialBalanceRows.length?materialBalanceRows.map(m=>`<div class="mu-card" data-mu-card="${m.confirmationId}">
+  <div class="mu-name">${escapeHtml(m.itemDescription)}</div>
+  <div class="mu-stats">
+   <div class="mu-stat"><span class="mu-stat-label">Diterima</span><span class="mu-stat-value">${fmt(m.qtyConfirmed)}</span></div>
+   <div class="mu-stat"><span class="mu-stat-label">Terpakai</span><span class="mu-stat-value">${fmt(m.qtyUsed)}</span></div>
+   <div class="mu-stat mu-stat-balance"><span class="mu-stat-label">Sisa</span><span class="mu-stat-value">${fmt(m.balance)}</span></div>
+  </div>
+  <div class="mu-input-row">
+   <input type="number" min="0.000001" max="${m.balance}" step="any" inputmode="decimal" placeholder="Qty dipakai (${escapeHtml(m.unit||'')})" data-mu-qty="${m.confirmationId}">
+   <button type="button" class="primary" data-mu-save="${m.confirmationId}">Catat</button>
+  </div>
+ </div>`).join(''):'<p class="empty">Tidak ada sisa material buat WO ini.</p>';
 }
 async function refreshMaterialBalance(){
  const woId=$('#progressWo').value;
  materialBalanceRows=[];
- $('#materialUsageItem').disabled=true;$('#materialUsageQty').disabled=true;$('#btnSaveMaterialUsage').disabled=true;
- if(!woId){renderMaterialUsageItemOptions();$('#materialUsageItem').innerHTML='<option value="">Pilih WO dulu</option>';return}
+ if(!woId){$('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';return}
  try{
   materialBalanceRows=await dailyApi('list_material_balance',{woId});
-  renderMaterialUsageItemOptions();
-  const has=materialBalanceRows.length>0;
-  $('#materialUsageItem').disabled=!has;$('#materialUsageQty').disabled=!has;$('#btnSaveMaterialUsage').disabled=!has;
-  if(!has)$('#materialUsageItem').innerHTML='<option value="">Tidak ada sisa material buat WO ini</option>';
- }catch(err){$('#materialUsageStatus').textContent='Gagal memuat sisa material: '+err.message}
+  renderMaterialUsageCards();
+ }catch(err){$('#materialUsageCards').innerHTML='<p class="empty">Gagal memuat sisa material: '+escapeHtml(err.message)+'</p>'}
 }
+$('#materialUsageCards').addEventListener('click',async e=>{
+ const btn=e.target.closest('[data-mu-save]');
+ if(!btn)return;
+ const confirmationId=btn.dataset.muSave;
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ const qtyInput=document.querySelector('[data-mu-qty="'+confirmationId+'"]');
+ const qty=Number(qtyInput.value);
+ $('#materialUsageStatus').textContent='';
+ if(!date){$('#materialUsageStatus').textContent='Isi tanggal dulu.';return}
+ if(!Number.isFinite(qty)||qty<=0){$('#materialUsageStatus').textContent='Qty tidak valid.';return}
+ btn.disabled=true;
+ try{
+  await dailyApi('save_material_usage',{confirmationId,woId,reportDate:date,qty});
+  await refreshMaterialBalance();
+  await refreshMaterialUsageForDate();
+  $('#materialUsageStatus').textContent='Pemakaian tersimpan.';
+ }catch(err){$('#materialUsageStatus').textContent='Gagal: '+err.message}
+ finally{btn.disabled=false}
+});
 let lastMaterialUsageRows=[];
 async function refreshMaterialUsageForDate(){
  const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
@@ -170,20 +194,6 @@ async function refreshMaterialUsageForDate(){
   $('#progressMaterialUsageList').innerHTML=rows.length?rows.map(m=>`<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.recordedByName||'-')}</span></div>`).join(''):'<p class="empty">Belum ada pemakaian material dicatat di WO ini pada tanggal tsb.</p>';
  }catch(err){$('#progressMaterialUsageList').innerHTML='<p class="empty">Gagal memuat data pemakaian: '+escapeHtml(err.message)+'</p>'}
 }
-$('#btnSaveMaterialUsage').onclick=busy($('#btnSaveMaterialUsage'),async()=>{
- const woId=$('#progressWo').value,date=$('#progressBatchDate').value,confirmationId=$('#materialUsageItem').value,qty=Number($('#materialUsageQty').value);
- $('#materialUsageStatus').textContent='';
- if(!woId||!confirmationId){$('#materialUsageStatus').textContent='Pilih item dulu.';return}
- if(!date){$('#materialUsageStatus').textContent='Isi tanggal dulu.';return}
- if(!Number.isFinite(qty)||qty<=0){$('#materialUsageStatus').textContent='Qty tidak valid.';return}
- try{
-  await dailyApi('save_material_usage',{confirmationId,woId,reportDate:date,qty});
-  $('#materialUsageQty').value='';
-  await refreshMaterialBalance();
-  await refreshMaterialUsageForDate();
-  $('#materialUsageStatus').textContent='Pemakaian tersimpan.';
- }catch(err){$('#materialUsageStatus').textContent='Gagal: '+err.message}
-});
 $('#progressBatchDate').addEventListener('change',async()=>{
  await refreshManpowerForDate();
  await refreshMaterialForDate();
