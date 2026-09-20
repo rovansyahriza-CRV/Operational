@@ -86,6 +86,10 @@ $('#logout').onclick=async()=>{
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
  $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
  $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
+ $('#progressMaterialUsageList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p>';
+ $('#materialUsageItem').innerHTML='<option value="">Pilih WO dulu</option>';$('#materialUsageItem').disabled=true;
+ $('#materialUsageQty').value='';$('#materialUsageQty').disabled=true;$('#btnSaveMaterialUsage').disabled=true;
+ $('#materialUsageStatus').textContent='';materialBalanceRows=[];lastMaterialUsageRows=[];
  showEditMode();
  status('Sudah keluar.');
 };
@@ -134,9 +138,56 @@ async function refreshMaterialForDate(){
   $('#progressMaterialList').innerHTML=rows.length?rows.map(m=>`<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.issuedByName||'-')} → ${escapeHtml(m.confirmedByName||'-')}</span></div>`).join(''):'<p class="empty">Belum ada material yang diserahkan di WO ini pada tanggal tsb.</p>';
  }catch(err){$('#progressMaterialList').innerHTML='<p class="empty">Gagal memuat data material: '+escapeHtml(err.message)+'</p>'}
 }
+// Material Digunakan: balance (sisa = diterima - dikembalikan - dipakai) di-scope ke WO aja
+// (material bisa dipakai berhari-hari), sedangkan histori pemakaian di-scope ke WO+tanggal
+// kayak manpower/material diterima.
+let materialBalanceRows=[];
+function renderMaterialUsageItemOptions(){
+ const sel=$('#materialUsageItem');
+ sel.innerHTML='<option value="">Pilih item</option>'+materialBalanceRows.map(m=>`<option value="${m.confirmationId}">${escapeHtml(m.itemDescription)} — sisa ${fmt(m.balance)} ${escapeHtml(m.unit||'')}</option>`).join('');
+}
+async function refreshMaterialBalance(){
+ const woId=$('#progressWo').value;
+ materialBalanceRows=[];
+ $('#materialUsageItem').disabled=true;$('#materialUsageQty').disabled=true;$('#btnSaveMaterialUsage').disabled=true;
+ if(!woId){renderMaterialUsageItemOptions();$('#materialUsageItem').innerHTML='<option value="">Pilih WO dulu</option>';return}
+ try{
+  materialBalanceRows=await dailyApi('list_material_balance',{woId});
+  renderMaterialUsageItemOptions();
+  const has=materialBalanceRows.length>0;
+  $('#materialUsageItem').disabled=!has;$('#materialUsageQty').disabled=!has;$('#btnSaveMaterialUsage').disabled=!has;
+  if(!has)$('#materialUsageItem').innerHTML='<option value="">Tidak ada sisa material buat WO ini</option>';
+ }catch(err){$('#materialUsageStatus').textContent='Gagal memuat sisa material: '+err.message}
+}
+let lastMaterialUsageRows=[];
+async function refreshMaterialUsageForDate(){
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ lastMaterialUsageRows=[];
+ if(!woId||!date){$('#progressMaterialUsageList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p>';return}
+ try{
+  const rows=await dailyApi('list_material_usage',{woId,reportDate:date});
+  lastMaterialUsageRows=rows;
+  $('#progressMaterialUsageList').innerHTML=rows.length?rows.map(m=>`<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.recordedByName||'-')}</span></div>`).join(''):'<p class="empty">Belum ada pemakaian material dicatat di WO ini pada tanggal tsb.</p>';
+ }catch(err){$('#progressMaterialUsageList').innerHTML='<p class="empty">Gagal memuat data pemakaian: '+escapeHtml(err.message)+'</p>'}
+}
+$('#btnSaveMaterialUsage').onclick=busy($('#btnSaveMaterialUsage'),async()=>{
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value,confirmationId=$('#materialUsageItem').value,qty=Number($('#materialUsageQty').value);
+ $('#materialUsageStatus').textContent='';
+ if(!woId||!confirmationId){$('#materialUsageStatus').textContent='Pilih item dulu.';return}
+ if(!date){$('#materialUsageStatus').textContent='Isi tanggal dulu.';return}
+ if(!Number.isFinite(qty)||qty<=0){$('#materialUsageStatus').textContent='Qty tidak valid.';return}
+ try{
+  await dailyApi('save_material_usage',{confirmationId,woId,reportDate:date,qty});
+  $('#materialUsageQty').value='';
+  await refreshMaterialBalance();
+  await refreshMaterialUsageForDate();
+  $('#materialUsageStatus').textContent='Pemakaian tersimpan.';
+ }catch(err){$('#materialUsageStatus').textContent='Gagal: '+err.message}
+});
 $('#progressBatchDate').addEventListener('change',async()=>{
  await refreshManpowerForDate();
  await refreshMaterialForDate();
+ await refreshMaterialUsageForDate();
  if(batchDetails.length){await loadItemWeather();renderBatchList()}
 });
 
@@ -158,6 +209,8 @@ $('#progressWo').addEventListener('change',async()=>{
  if(woId)await loadReportHeader();
  refreshManpowerForDate();
  refreshMaterialForDate();
+ refreshMaterialBalance();
+ refreshMaterialUsageForDate();
 });
 
 // --- Detail Laporan (header proyek: Owner/Lokasi/Kontraktor/Konsultan/No.SPK) --
@@ -306,6 +359,8 @@ $('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
  const total=renderBatchList();
  await refreshManpowerForDate();
  await refreshMaterialForDate();
+ await refreshMaterialBalance();
+ await refreshMaterialUsageForDate();
  $('#progressViewReport').disabled=false;
  status(total+' sub-item tersedia buat diisi progress.');
 });
@@ -360,13 +415,14 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   dailyApi('get_report_header',{woId}).catch(()=>null)
  ]);
  const materials=lastMaterialRows;
+ const materialUsage=lastMaterialUsageRows;
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
  const manpowerGroups=groupManpowerByKualifikasi(lastManpowerRows);
  const dayProgress=header?computeDayProgress(header.startDate,header.endDate,reportDate):null;
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials
+  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,materialUsage
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -385,7 +441,11 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   <strong>Material Diterima End User</strong>
   ${materials.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; diserahkan ${escapeHtml(m.issuedByName||'-')} ke ${escapeHtml(m.confirmedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
  </div>`:'';
- $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+(groups.length?groups.map(g=>`<div class="report-card">
+ const materialUsageHtml=materialUsage&&materialUsage.length?`<div class="report-header-block">
+  <strong>Material Digunakan</strong>
+  ${materialUsage.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; oleh ${escapeHtml(m.recordedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
+ </div>`:'';
+ $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+materialUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
    ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
@@ -492,6 +552,17 @@ async function buildDailyReportDoc(){
    startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
    head:[['Item','Qty','Satuan','Diserahkan','Diterima','Catatan']],
    body:lastReportContext.materials.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.issuedByName||'-',m.confirmedByName||'-',m.notes||'-'])
+  });
+  y=doc.lastAutoTable.finalY+18;
+ }
+
+ if(lastReportContext.materialUsage&&lastReportContext.materialUsage.length){
+  if(y>pageHeight-100){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL DIGUNAKAN',margin,y);
+  doc.autoTable({
+   startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
+   head:[['Item','Qty','Satuan','Dicatat Oleh','Catatan']],
+   body:lastReportContext.materialUsage.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.recordedByName||'-',m.notes||'-'])
   });
   y=doc.lastAutoTable.finalY+18;
  }

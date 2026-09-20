@@ -75,6 +75,17 @@
  <h2>Material diterima end user</h2>
  <div id="progressMaterialList"><p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p></div>
 
+ <h2>Material digunakan</h2>
+ <div class="field-row">
+  <div><label for="materialUsageItem">Item (sisa di WO ini)</label><select id="materialUsageItem" disabled><option value="">Pilih WO dulu</option></select></div>
+ </div>
+ <div class="field-row">
+  <div><label for="materialUsageQty">Qty digunakan hari ini</label><input id="materialUsageQty" type="number" min="0.000001" step="any" inputmode="decimal" disabled></div>
+  <button id="btnSaveMaterialUsage" type="button" class="primary" disabled>Catat pemakaian</button>
+ </div>
+ <p id="materialUsageStatus" role="status"></p>
+ <div id="progressMaterialUsageList"><p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p></div>
+
  <div id="progressEditMode">
   <label for="progressSearch">Cari</label>
   <input id="progressSearch" type="search" placeholder="Cari kode/uraian item atau breakdown..." autocomplete="off">
