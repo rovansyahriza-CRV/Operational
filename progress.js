@@ -86,6 +86,7 @@ $('#logout').onclick=async()=>{
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
  $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
  $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
+ $('#progressEquipmentReceivedList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat alat yang diterima.</p>';
  $('#progressMaterialUsageList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p>';
  $('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';
  $('#materialUsageStatus').textContent='';materialBalanceRows=[];lastMaterialUsageRows=[];
@@ -130,15 +131,25 @@ async function refreshManpowerForDate(){
 // cuma di Daily Report. lastMaterialRows dipakai ulang pas bikin Daily Report/PDF biar gak
 // nembak query 2x.
 let lastMaterialRows=[];
+function receivedCard(m){return `<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.issuedByName||'-')} → ${escapeHtml(m.confirmedByName||'-')}</span></div>`}
 async function refreshMaterialForDate(){
  const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
  lastMaterialRows=[];
- if(!woId||!date){$('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';return}
+ if(!woId||!date){
+  $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
+  $('#progressEquipmentReceivedList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat alat yang diterima.</p>';
+  return;
+ }
  try{
   const rows=await dailyApi('list_material_received',{woId,reportDate:date});
   lastMaterialRows=rows;
-  $('#progressMaterialList').innerHTML=rows.length?rows.map(m=>`<div class="mp-card"><span class="mp-name">${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')}</span><span class="mp-time">${escapeHtml(m.issuedByName||'-')} → ${escapeHtml(m.confirmedByName||'-')}</span></div>`).join(''):'<p class="empty">Belum ada material yang diserahkan di WO ini pada tanggal tsb.</p>';
- }catch(err){$('#progressMaterialList').innerHTML='<p class="empty">Gagal memuat data material: '+escapeHtml(err.message)+'</p>'}
+  const materialRows=rows.filter(m=>m.category!=='EQUIPMENT'),equipRows=rows.filter(m=>m.category==='EQUIPMENT');
+  $('#progressMaterialList').innerHTML=materialRows.length?materialRows.map(receivedCard).join(''):'<p class="empty">Belum ada material/consumables yang diserahkan di WO ini pada tanggal tsb.</p>';
+  $('#progressEquipmentReceivedList').innerHTML=equipRows.length?equipRows.map(receivedCard).join(''):'<p class="empty">Belum ada alat/tools yang diserahkan di WO ini pada tanggal tsb.</p>';
+ }catch(err){
+  $('#progressMaterialList').innerHTML='<p class="empty">Gagal memuat data material: '+escapeHtml(err.message)+'</p>';
+  $('#progressEquipmentReceivedList').innerHTML='<p class="empty">Gagal memuat data alat: '+escapeHtml(err.message)+'</p>';
+ }
 }
 // Material Digunakan: balance (sisa = diterima - dikembalikan - dipakai) di-scope ke WO aja
 // (material bisa dipakai berhari-hari), sedangkan histori pemakaian di-scope ke WO+tanggal
@@ -162,7 +173,7 @@ function renderMaterialUsageCards(){
 }
 function equipmentStateFor(confirmationId){
  const open=equipmentCheckins.find(c=>c.confirmation_id===Number(confirmationId)&&!c.check_out_at);
- if(open)return{status:'checkin',hours:(Date.now()-new Date(open.check_in_at).getTime())/3600000};
+ if(open)return{status:'checkin',hours:Math.max(0,(Date.now()-new Date(open.check_in_at).getTime())/3600000)};
  const done=equipmentCheckins.filter(c=>c.confirmation_id===Number(confirmationId)&&c.check_out_at).sort((a,b)=>new Date(b.check_out_at)-new Date(a.check_out_at));
  return{status:'checkout',hours:done.length?done[0].hours:null};
 }
@@ -493,7 +504,8 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   dailyApi('read_daily_report',{smsId,reportDate}),
   dailyApi('get_report_header',{woId}).catch(()=>null)
  ]);
- const materials=lastMaterialRows;
+ const materials=lastMaterialRows.filter(m=>m.category!=='EQUIPMENT');
+ const equipmentReceived=lastMaterialRows.filter(m=>m.category==='EQUIPMENT');
  const materialUsage=lastMaterialUsageRows;
  const equipmentUsage=equipmentCheckins.filter(c=>localDateOf(c.check_in_at)===reportDate);
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
@@ -502,7 +514,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,materialUsage,equipmentUsage
+  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,equipmentReceived,materialUsage,equipmentUsage
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -518,8 +530,12 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   ${manpowerGroups.map(g=>`<div>${escapeHtml(g.kualifikasi)}: ${g.members.length} orang</div>`).join('')}
  </div>`:'';
  const materialHtml=materials&&materials.length?`<div class="report-header-block">
-  <strong>Material Diterima End User</strong>
+  <strong>Material &amp; Consumables Diterima End User</strong>
   ${materials.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; diserahkan ${escapeHtml(m.issuedByName||'-')} ke ${escapeHtml(m.confirmedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
+ </div>`:'';
+ const equipmentReceivedHtml=equipmentReceived&&equipmentReceived.length?`<div class="report-header-block">
+  <strong>Alat &amp; Tools Diterima End User</strong>
+  ${equipmentReceived.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; diserahkan ${escapeHtml(m.issuedByName||'-')} ke ${escapeHtml(m.confirmedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
  </div>`:'';
  const materialUsageHtml=materialUsage&&materialUsage.length?`<div class="report-header-block">
   <strong>Material &amp; Consumables Digunakan</strong>
@@ -529,7 +545,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   <strong>Alat &amp; Tools Digunakan</strong>
   ${equipmentUsage.map(c=>`<div>${escapeHtml(c.item_description)} — ${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'} &middot; oleh ${escapeHtml(c.recorded_by_name||'-')}</div>`).join('')}
  </div>`:'';
- $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
+ $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+equipmentReceivedHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
    ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
@@ -631,11 +647,22 @@ async function buildDailyReportDoc(){
 
  if(lastReportContext.materials&&lastReportContext.materials.length){
   if(y>pageHeight-100){doc.addPage();y=margin}
-  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL DITERIMA END USER',margin,y);
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL & CONSUMABLES DITERIMA END USER',margin,y);
   doc.autoTable({
    startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
    head:[['Item','Qty','Satuan','Diserahkan','Diterima','Catatan']],
    body:lastReportContext.materials.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.issuedByName||'-',m.confirmedByName||'-',m.notes||'-'])
+  });
+  y=doc.lastAutoTable.finalY+18;
+ }
+
+ if(lastReportContext.equipmentReceived&&lastReportContext.equipmentReceived.length){
+  if(y>pageHeight-100){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ALAT & TOOLS DITERIMA END USER',margin,y);
+  doc.autoTable({
+   startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
+   head:[['Item','Qty','Satuan','Diserahkan','Diterima','Catatan']],
+   body:lastReportContext.equipmentReceived.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.issuedByName||'-',m.confirmedByName||'-',m.notes||'-'])
   });
   y=doc.lastAutoTable.finalY+18;
  }
