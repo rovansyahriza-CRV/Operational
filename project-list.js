@@ -42,7 +42,7 @@ $('#loginForm').onsubmit=async e=>{
   const result=await rpc('op_login',{p_id:id,p_password:$('#employeePassword').value});
   if(result?.error)throw Error(result.error);
   const allowed=(result.pic||[]).some(x=>['all','operational wo','operational master komersial'].includes(String(x).trim().toLowerCase()));
-  if(!allowed)throw Error('Akun ini belum diizinkan akses Project List.');
+  if(!allowed)throw Error('Akun ini belum diizinkan akses Data Proyek.');
   opSession=result;
   $('#employeePassword').value='';
   $('#loginSection').hidden=true;$('#projectSection').hidden=false;
