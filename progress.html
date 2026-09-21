@@ -48,15 +48,16 @@
  <details id="reportHeaderDetails" hidden>
   <summary>Detail Laporan (isi sekali per WO)</summary>
   <label for="rhClient">Pemilik Proyek (Owner)</label>
-  <input id="rhClient" type="text">
+  <input id="rhClient" type="text" disabled>
+  <label for="rhContractor">Kontraktor Pelaksana</label>
+  <input id="rhContractor" type="text" disabled>
+  <label for="rhConsultant">Konsultan Pengawas</label>
+  <input id="rhConsultant" type="text" disabled>
+  <label for="rhContractNumber">No. SPK / Kontrak</label>
+  <input id="rhContractNumber" type="text" disabled>
+  <p class="hint">4 field di atas dikelola sekali per proyek di <a href="project-list.html" target="_blank">Project List</a>, bukan di sini.</p>
   <label for="rhLocation">Lokasi Proyek</label>
   <input id="rhLocation" type="text">
-  <label for="rhContractor">Kontraktor Pelaksana</label>
-  <input id="rhContractor" type="text">
-  <label for="rhConsultant">Konsultan Pengawas</label>
-  <input id="rhConsultant" type="text">
-  <label for="rhContractNumber">No. SPK / Kontrak</label>
-  <input id="rhContractNumber" type="text">
   <div class="field-row">
    <div><label for="rhStart">Mulai WO</label><input id="rhStart" type="date"></div>
    <div><label for="rhEnd">Akhir WO</label><input id="rhEnd" type="date"></div>

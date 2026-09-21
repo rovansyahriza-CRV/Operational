@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Project List — BIMA SPMS</title>
+<link rel="stylesheet" href="progress.css">
+</head>
+<body>
+<header>
+ <div class="brand">
+  <img src="logo.png" alt="BIMA">
+  <h1>Project List</h1>
+ </div>
+ <div class="header-right">
+  <span id="identity">Belum login</span>
+  <button id="logout" hidden>Keluar</button>
+ </div>
+</header>
+
+<section id="loginSection">
+ <form id="loginForm">
+  <p class="hint">Login pakai akun SMMS yang sama dengan aplikasi Operational.</p>
+  <label for="employeeSearch">Nama karyawan</label>
+  <input id="employeeSearch" type="text" autocomplete="off" placeholder="Ketik minimal 2 huruf nama" required aria-describedby="employeeSearchStatus">
+  <input id="employeeId" type="hidden">
+  <p id="employeeSearchStatus" role="status"></p>
+  <div id="employeeSuggestions" hidden aria-label="Hasil pencarian karyawan"></div>
+  <label for="employeePassword">Password</label>
+  <input id="employeePassword" type="password" autocomplete="current-password" required>
+  <p id="loginError" role="alert"></p>
+  <button class="primary" id="loginSubmit" type="submit">Masuk</button>
+ </form>
+</section>
+
+<section id="projectSection" hidden>
+ <p class="hint">Kelola data Pemilik Proyek, Kontraktor Pelaksana, dan Konsultan Pengawas sekali per proyek — otomatis tampil di Detail Laporan Daily Progress semua WO pada proyek tersebut. Lokasi Proyek dan tanggal WO tetap diisi di Daily Progress (bisa beda per WO).</p>
+ <div class="field-row">
+  <input id="projectSearch" type="search" placeholder="Cari kode/nama proyek..." autocomplete="off">
+  <button id="btnLoadProjects" type="button">Muat</button>
+ </div>
+ <div id="projectList"><p class="empty">Klik Muat buat lihat daftar proyek.</p></div>
+
+ <div id="projectEditCard" hidden>
+  <h2 id="projectEditTitle">Edit Info Proyek</h2>
+  <label for="peClient">Pemilik Proyek (Owner)</label>
+  <input id="peClient" type="text">
+  <label for="peContractor">Kontraktor Pelaksana</label>
+  <input id="peContractor" type="text">
+  <label for="peConsultant">Konsultan Pengawas</label>
+  <input id="peConsultant" type="text">
+  <div class="field-row">
+   <button id="btnSaveProjectInfo" type="button" class="primary">Simpan</button>
+   <button id="btnCancelEdit" type="button">Batal</button>
+  </div>
+  <p id="projectEditStatus" role="status"></p>
+ </div>
+</section>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script src="project-list.js" defer></script>
+</body>
+</html>

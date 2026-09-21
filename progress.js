@@ -302,24 +302,26 @@ $('#progressWo').addEventListener('change',async()=>{
  refreshEquipmentCheckins();
 });
 
-// --- Detail Laporan (header proyek: Owner/Lokasi/Kontraktor/Konsultan/No.SPK) --
-// isi sekali per WO, disimpan ke Supabase (operational.projects lewat WO->contract->project).
+// --- Detail Laporan --
+// Owner/Kontraktor Pelaksana/Konsultan Pengawas/No.SPK dikelola sekali per proyek di
+// project-list.html (read-only di sini). Cuma Lokasi Proyek + Mulai/Akhir WO yang manual
+// di Daily Progress, disimpan ke Supabase lewat WO->contract->project.
 async function loadReportHeader(){
  const woId=$('#progressWo').value;if(!woId)return;
  $('#reportHeaderStatus').textContent='';
  try{
   const h=await dailyApi('get_report_header',{woId});
-  $('#rhClient').value=h.client||'';$('#rhLocation').value=h.location||'';
-  $('#rhContractor').value=h.contractorName||'';$('#rhConsultant').value=h.supervisorConsultant||'';
-  $('#rhContractNumber').value=h.contractNumber||'';$('#rhStart').value=h.startDate||'';$('#rhEnd').value=h.endDate||'';
+  $('#rhClient').value=h.client||'Belum diisi -- kelola di Project List';
+  $('#rhContractor').value=h.contractorName||'Belum diisi -- kelola di Project List';
+  $('#rhConsultant').value=h.supervisorConsultant||'Belum diisi -- kelola di Project List';
+  $('#rhContractNumber').value=h.contractNumber||'-';
+  $('#rhLocation').value=h.location||'';$('#rhStart').value=h.startDate||'';$('#rhEnd').value=h.endDate||'';
  }catch(err){$('#reportHeaderStatus').textContent='Gagal memuat: '+err.message}
 }
 $('#reportHeaderSave').onclick=busy($('#reportHeaderSave'),async()=>{
  const woId=$('#progressWo').value;if(!woId){status('Pilih WO dulu.');return}
  await dailyApi('save_report_header',{
-  woId,client:$('#rhClient').value.trim(),location:$('#rhLocation').value.trim(),
-  contractorName:$('#rhContractor').value.trim(),supervisorConsultant:$('#rhConsultant').value.trim(),
-  contractNumber:$('#rhContractNumber').value.trim(),startDate:$('#rhStart').value,endDate:$('#rhEnd').value
+  woId,location:$('#rhLocation').value.trim(),startDate:$('#rhStart').value,endDate:$('#rhEnd').value
  });
  $('#reportHeaderStatus').textContent='Tersimpan.';
 });
