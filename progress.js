@@ -89,6 +89,9 @@ $('#logout').onclick=async()=>{
  $('#progressMaterialUsageList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian material.</p>';
  $('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';
  $('#materialUsageStatus').textContent='';materialBalanceRows=[];lastMaterialUsageRows=[];
+ $('#equipmentCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat alat/tools.</p>';
+ $('#progressEquipmentList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian alat.</p>';
+ $('#equipmentStatus').textContent='';equipmentRows=[];equipmentCheckins=[];
  showEditMode();
  status('Sudah keluar.');
 };
@@ -139,8 +142,10 @@ async function refreshMaterialForDate(){
 }
 // Material Digunakan: balance (sisa = diterima - dikembalikan - dipakai) di-scope ke WO aja
 // (material bisa dipakai berhari-hari), sedangkan histori pemakaian di-scope ke WO+tanggal
-// kayak manpower/material diterima.
-let materialBalanceRows=[];
+// kayak manpower/material diterima. list_material_balance nyertain 'category' (EQUIPMENT buat
+// Tools/Heavy Equipment, MATERIAL buat sisanya termasuk Consumables) -- dipisah di client jadi
+// dua section: Material/Consumables (qty aja) vs Alat/Tools (qty + checkin/checkout jam pakai).
+let materialBalanceRows=[],equipmentRows=[];
 function renderMaterialUsageCards(){
  $('#materialUsageCards').innerHTML=materialBalanceRows.length?materialBalanceRows.map(m=>`<div class="mu-card" data-mu-card="${m.confirmationId}">
   <div class="mu-name">${escapeHtml(m.itemDescription)}</div>
@@ -153,17 +158,78 @@ function renderMaterialUsageCards(){
    <input type="number" min="0.000001" max="${m.balance}" step="any" inputmode="decimal" placeholder="Qty dipakai (${escapeHtml(m.unit||'')})" data-mu-qty="${m.confirmationId}">
    <button type="button" class="primary" data-mu-save="${m.confirmationId}">Catat</button>
   </div>
- </div>`).join(''):'<p class="empty">Tidak ada sisa material buat WO ini.</p>';
+ </div>`).join(''):'<p class="empty">Tidak ada sisa material/consumables buat WO ini.</p>';
+}
+function equipmentStateFor(confirmationId){
+ const open=equipmentCheckins.find(c=>c.confirmation_id===Number(confirmationId)&&!c.check_out_at);
+ if(open)return{status:'checkin',hours:(Date.now()-new Date(open.check_in_at).getTime())/3600000};
+ const done=equipmentCheckins.filter(c=>c.confirmation_id===Number(confirmationId)&&c.check_out_at).sort((a,b)=>new Date(b.check_out_at)-new Date(a.check_out_at));
+ return{status:'checkout',hours:done.length?done[0].hours:null};
+}
+function renderEquipmentCards(){
+ $('#equipmentCards').innerHTML=equipmentRows.length?equipmentRows.map(m=>{
+  const st=equipmentStateFor(m.confirmationId);
+  return `<div class="mu-card">
+   <div class="mu-name">${escapeHtml(m.itemDescription)}</div>
+   <div class="mu-stats">
+    <div class="mu-stat"><span class="mu-stat-label">Qty</span><span class="mu-stat-value">${fmt(m.qtyConfirmed)} ${escapeHtml(m.unit||'')}</span></div>
+    <div class="mu-stat"><span class="mu-stat-label">Status</span><span class="mu-stat-value">${st.status==='checkin'?'Checkin':'Checkout'}</span></div>
+    <div class="mu-stat mu-stat-balance"><span class="mu-stat-label">Jam Pakai</span><span class="mu-stat-value">${st.hours!=null?fmt(st.hours):'-'}</span></div>
+   </div>
+   <button type="button" class="primary" data-eq-toggle="${m.confirmationId}" data-eq-status="${st.status}">${st.status==='checkin'?'Check-out':'Check-in'}</button>
+  </div>`;
+ }).join(''):'<p class="empty">Tidak ada alat/tools buat WO ini.</p>';
 }
 async function refreshMaterialBalance(){
  const woId=$('#progressWo').value;
- materialBalanceRows=[];
- if(!woId){$('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';return}
+ materialBalanceRows=[];equipmentRows=[];
+ if(!woId){
+  $('#materialUsageCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat sisa material.</p>';
+  $('#equipmentCards').innerHTML='<p class="empty">Pilih WO dulu buat lihat alat/tools.</p>';
+  return;
+ }
  try{
-  materialBalanceRows=await dailyApi('list_material_balance',{woId});
+  const rows=await dailyApi('list_material_balance',{woId});
+  materialBalanceRows=rows.filter(m=>m.category!=='EQUIPMENT');
+  equipmentRows=rows.filter(m=>m.category==='EQUIPMENT');
   renderMaterialUsageCards();
- }catch(err){$('#materialUsageCards').innerHTML='<p class="empty">Gagal memuat sisa material: '+escapeHtml(err.message)+'</p>'}
+  renderEquipmentCards();
+ }catch(err){
+  $('#materialUsageCards').innerHTML='<p class="empty">Gagal memuat sisa material: '+escapeHtml(err.message)+'</p>';
+  $('#equipmentCards').innerHTML='<p class="empty">Gagal memuat alat/tools: '+escapeHtml(err.message)+'</p>';
+ }
 }
+let equipmentCheckins=[];
+async function refreshEquipmentCheckins(){
+ const woId=$('#progressWo').value;
+ equipmentCheckins=[];
+ if(!woId){renderEquipmentCards();renderEquipmentHistoryForDate();return}
+ try{
+  equipmentCheckins=await dailyApi('list_equipment_checkins',{woId});
+ }catch(err){}
+ renderEquipmentCards();
+ renderEquipmentHistoryForDate();
+}
+function renderEquipmentHistoryForDate(){
+ const date=$('#progressBatchDate').value;
+ if(!date){$('#progressEquipmentList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat pemakaian alat.</p>';return}
+ const rows=equipmentCheckins.filter(c=>localDateOf(c.check_in_at)===date);
+ $('#progressEquipmentList').innerHTML=rows.length?rows.map(c=>`<div class="mp-card"><span class="mp-name">${escapeHtml(c.item_description)}</span><span class="mp-time">${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'}</span></div>`).join(''):'<p class="empty">Belum ada pemakaian alat dicatat di WO ini pada tanggal tsb.</p>';
+}
+$('#equipmentCards').addEventListener('click',async e=>{
+ const btn=e.target.closest('[data-eq-toggle]');
+ if(!btn)return;
+ const confirmationId=btn.dataset.eqToggle,curStatus=btn.dataset.eqStatus,woId=$('#progressWo').value;
+ $('#equipmentStatus').textContent='';
+ btn.disabled=true;
+ try{
+  if(curStatus==='checkin')await dailyApi('equipment_checkout',{confirmationId});
+  else await dailyApi('equipment_checkin',{confirmationId,woId});
+  await refreshEquipmentCheckins();
+  $('#equipmentStatus').textContent=curStatus==='checkin'?'Check-out tersimpan.':'Check-in tersimpan.';
+ }catch(err){$('#equipmentStatus').textContent='Gagal: '+err.message}
+ finally{btn.disabled=false}
+});
 $('#materialUsageCards').addEventListener('click',async e=>{
  const btn=e.target.closest('[data-mu-save]');
  if(!btn)return;
@@ -198,6 +264,7 @@ $('#progressBatchDate').addEventListener('change',async()=>{
  await refreshManpowerForDate();
  await refreshMaterialForDate();
  await refreshMaterialUsageForDate();
+ renderEquipmentHistoryForDate();
  if(batchDetails.length){await loadItemWeather();renderBatchList()}
 });
 
@@ -221,6 +288,7 @@ $('#progressWo').addEventListener('change',async()=>{
  refreshMaterialForDate();
  refreshMaterialBalance();
  refreshMaterialUsageForDate();
+ refreshEquipmentCheckins();
 });
 
 // --- Detail Laporan (header proyek: Owner/Lokasi/Kontraktor/Konsultan/No.SPK) --
@@ -371,6 +439,7 @@ $('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
  await refreshMaterialForDate();
  await refreshMaterialBalance();
  await refreshMaterialUsageForDate();
+ await refreshEquipmentCheckins();
  $('#progressViewReport').disabled=false;
  status(total+' sub-item tersedia buat diisi progress.');
 });
@@ -426,13 +495,14 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  ]);
  const materials=lastMaterialRows;
  const materialUsage=lastMaterialUsageRows;
+ const equipmentUsage=equipmentCheckins.filter(c=>localDateOf(c.check_in_at)===reportDate);
  groups.forEach(g=>g.entries.forEach(e=>{const detail=batchDetails.find(d=>d.id===e.detailId);e._path=detail?pathFor(batchDetails,detail):e.description}));
  const manpowerGroups=groupManpowerByKualifikasi(lastManpowerRows);
  const dayProgress=header?computeDayProgress(header.startDate,header.endDate,reportDate):null;
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,materialUsage
+  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,materialUsage,equipmentUsage
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -452,10 +522,14 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   ${materials.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; diserahkan ${escapeHtml(m.issuedByName||'-')} ke ${escapeHtml(m.confirmedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
  </div>`:'';
  const materialUsageHtml=materialUsage&&materialUsage.length?`<div class="report-header-block">
-  <strong>Material Digunakan</strong>
+  <strong>Material &amp; Consumables Digunakan</strong>
   ${materialUsage.map(m=>`<div>${escapeHtml(m.itemDescription)} — ${fmt(m.qty)} ${escapeHtml(m.unit||'')} &middot; oleh ${escapeHtml(m.recordedByName||'-')}${m.notes?' &middot; '+escapeHtml(m.notes):''}</div>`).join('')}
  </div>`:'';
- $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+materialUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
+ const equipmentUsageHtml=equipmentUsage&&equipmentUsage.length?`<div class="report-header-block">
+  <strong>Alat &amp; Tools Digunakan</strong>
+  ${equipmentUsage.map(c=>`<div>${escapeHtml(c.item_description)} — ${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'} &middot; oleh ${escapeHtml(c.recorded_by_name||'-')}</div>`).join('')}
+ </div>`:'';
+ $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
    ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
@@ -568,11 +642,22 @@ async function buildDailyReportDoc(){
 
  if(lastReportContext.materialUsage&&lastReportContext.materialUsage.length){
   if(y>pageHeight-100){doc.addPage();y=margin}
-  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL DIGUNAKAN',margin,y);
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('MATERIAL & CONSUMABLES DIGUNAKAN',margin,y);
   doc.autoTable({
    startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
    head:[['Item','Qty','Satuan','Dicatat Oleh','Catatan']],
    body:lastReportContext.materialUsage.map(m=>[m.itemDescription,fmt(m.qty),m.unit||'-',m.recordedByName||'-',m.notes||'-'])
+  });
+  y=doc.lastAutoTable.finalY+18;
+ }
+
+ if(lastReportContext.equipmentUsage&&lastReportContext.equipmentUsage.length){
+  if(y>pageHeight-100){doc.addPage();y=margin}
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ALAT & TOOLS DIGUNAKAN',margin,y);
+  doc.autoTable({
+   startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
+   head:[['Item','Satuan','Status','Jam Pakai','Dicatat Oleh']],
+   body:lastReportContext.equipmentUsage.map(c=>[c.item_description,c.unit||'-',c.check_out_at?'Checkout':'Checkin',fmt(c.hours),c.recorded_by_name||'-'])
   });
   y=doc.lastAutoTable.finalY+18;
  }
