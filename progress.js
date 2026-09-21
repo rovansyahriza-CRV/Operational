@@ -543,7 +543,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  </div>`:'';
  const equipmentUsageHtml=equipmentUsage&&equipmentUsage.length?`<div class="report-header-block">
   <strong>Alat &amp; Tools Digunakan</strong>
-  ${equipmentUsage.map(c=>`<div>${escapeHtml(c.item_description)} — ${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'} &middot; oleh ${escapeHtml(c.recorded_by_name||'-')}</div>`).join('')}
+  ${equipmentUsage.map(c=>`<div>${escapeHtml(c.item_description)} — ${fmt(c.qty)} ${escapeHtml(c.unit||'')} &middot; ${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'} &middot; oleh ${escapeHtml(c.recorded_by_name||'-')}</div>`).join('')}
  </div>`:'';
  $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+equipmentReceivedHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
@@ -683,8 +683,8 @@ async function buildDailyReportDoc(){
   doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('ALAT & TOOLS DIGUNAKAN',margin,y);
   doc.autoTable({
    startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},headStyles,
-   head:[['Item','Satuan','Status','Jam Pakai','Dicatat Oleh']],
-   body:lastReportContext.equipmentUsage.map(c=>[c.item_description,c.unit||'-',c.check_out_at?'Checkout':'Checkin',fmt(c.hours),c.recorded_by_name||'-'])
+   head:[['Item','Qty','Satuan','Status','Jam Pakai','Dicatat Oleh']],
+   body:lastReportContext.equipmentUsage.map(c=>[c.item_description,fmt(c.qty),c.unit||'-',c.check_out_at?'Checkout':'Checkin',fmt(c.hours),c.recorded_by_name||'-'])
   });
   y=doc.lastAutoTable.finalY+18;
  }
