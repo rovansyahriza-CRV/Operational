@@ -27,7 +27,7 @@ $('#preview').onclick=()=>{
  }
 };
 $('#loginOpen').onclick=()=>$('#loginDialog').showModal();$('#loginClose').onclick=()=>$('#loginDialog').close();
-$('#loginForm').onsubmit=async e=>{e.preventDefault();const b=$('#loginSubmit');b.disabled=true;$('#loginError').textContent='';try{const id=$('#employeeId').value.trim();if(!/^\d+$/.test(id))throw Error('Pilih nama karyawan dari hasil pencarian.');const result=await rpc('op_login',{p_id:id,p_password:$('#employeePassword').value});if(result?.error)throw Error(result.error);opSession=result;$('#employeePassword').value='';$('#loginDialog').close();authUi();status('Login berhasil. Akses mengikuti PIC dan approval mengikuti Author.');if($('#projectCode').value)refreshSharedDrafts($('#projectCode').value);if(!hasPic('Operational Master Komersial')&&hasPic('Operational WO'))tab('wo')}catch(err){$('#loginError').textContent=err.message;$('#employeePassword').value=''}finally{b.disabled=false}};
+$('#loginForm').onsubmit=async e=>{e.preventDefault();const b=$('#loginSubmit');b.disabled=true;$('#loginError').textContent='';try{const id=$('#employeeId').value.trim();if(!/^\d+$/.test(id))throw Error('Pilih nama karyawan dari hasil pencarian.');const result=await rpc('op_login',{p_id:id,p_password:$('#employeePassword').value});if(result?.error)throw Error(result.error);opSession=result;$('#employeePassword').value='';$('#loginDialog').close();authUi();status('Login berhasil. Akses mengikuti PIC dan approval mengikuti Author.');syncProjectsFromSupabase();if($('#projectCode').value)refreshSharedDrafts($('#projectCode').value);if(!hasPic('Operational Master Komersial')&&hasPic('Operational WO'))tab('wo')}catch(err){$('#loginError').textContent=err.message;$('#employeePassword').value=''}finally{b.disabled=false}};
 $('#logout').onclick=async()=>{try{if(opSession)await rpc('op_logout',{p_token:opSession.token})}catch(err){status('Koneksi logout gagal; sesi di browser tetap dihapus.')}opSession=null;remoteContractId=null;remoteWoId=null;sharedDraftMeta=null;revisingSourceWoId=null;currentSmsId=null;parsed={items:[],issues:[],skipped:[]};wo=[];setSms();selected.clear();$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>';$('#savedWos').innerHTML='<option value="">Pilih WO tersimpan</option>';$('#savedSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#sharedDrafts').innerHTML='<option value="">Pilih draft tim (Supabase)</option>';$('#sharedDrafts').disabled=true;renderMaster();renderWo();resetBinding();tab('master');status('Sudah keluar. Data yang dimuat telah dibersihkan.')};
 $('#loadContracts').onclick=busy($('#loadContracts'),async()=>{remoteContracts=await api('contracts');$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>'+remoteContracts.map(c=>`<option value="${c.id}">${escapeHtml(c.project_code+' / '+c.number+' / Rev '+c.revision)}</option>`).join('');status(remoteContracts.length+' kontrak tersedia.')});
 async function loadMaster(cid){const contract=remoteContracts.find(c=>c.id===cid);if(!contract)throw Error('Pilih kontrak terlebih dahulu.');const rows=await api('master',{contractId:cid});remoteContractId=cid;remoteWoId=null;sharedDraftMeta=null;parsed={items:rows.map(i=>({id:i.id,code:i.code,description:i.description,parentId:i.parent_id,rowKind:i.row_kind,unit:i.unit,price:i.unit_price,qty:i.reference_qty,amount:i.source_amount,rate:i.rate_kind,sourceRow:i.source_row})),issues:[],skipped:[]};wo=[];setSms();selected.clear();collapsed.clear();$('#projectCode').value=contract.project_code;$('#projectName').value=contract.project_name;$('#contractNo').value=contract.number;$('#contractType').value=contract.contract_type;$('#revision').value=contract.revision;$('#contractBinding').textContent=contract.number+' · Rev '+contract.revision+' · tersimpan';renderMaster();renderWo();status('Master dimuat dari Supabase.');tab('master')}
@@ -499,9 +499,23 @@ $('#exportWoExcel').onclick=async()=>{
 };
 
 "use strict";
-const projectStorage='bima-spms-projects-v1';let projectList=[],editingProject=null;
-try{const saved=JSON.parse(localStorage.getItem(projectStorage)||'[]');if(!Array.isArray(saved)||saved.some(p=>!p||!['id','code','name','client','location','state'].every(k=>typeof p[k]==='string')))throw Error('Format project tidak valid');projectList=saved;}catch(e){status('Daftar project lokal tidak dapat dibaca: '+e.message);}
+let projectList=[],editingProject=null;
 const states={ACTIVE:'Aktif',PLANNING:'Persiapan',CLOSED:'Selesai'};
+// Project List sekarang sumbernya Supabase (operational.projects), bukan localStorage lagi --
+// biar Owner/Kontraktor/Konsultan sekali input dan otomatis kepake di Daily Progress juga.
+// revision/contractType TETAP cuma prefill lokal (gak ada kolomnya di operational.projects),
+// reset tiap reload -- itu sesuai default yang sudah ada (01 / BLANKET_ORDER).
+async function syncProjectsFromSupabase(){
+ if(!opSession)return;
+ try{
+  const rows=await api('list_projects');
+  projectList=rows.map(r=>({id:r.id,code:r.code,name:r.name,client:r.client||'',location:r.location||'',
+   contractorName:r.contractorName||'',supervisorConsultant:r.supervisorConsultant||'',smmsProjectId:r.smmsProjectId??'',
+   contract:r.contractNumber||'',startDate:r.startDate||'',endDate:r.endDate||'',state:r.status||'ACTIVE',
+   revision:'01',contractType:'BLANKET_ORDER'}));
+  renderProjects();
+ }catch(err){status('Gagal memuat daftar project dari Supabase: '+err.message)}
+}
 function renderProjects(){
  renderProjectCodeOptions();
  $('#projectCount').textContent=projectList.length;$('#activeProjectCount').textContent=projectList.filter(p=>p.state==='ACTIVE').length;
@@ -509,10 +523,27 @@ function renderProjects(){
  document.querySelectorAll('[data-project-edit]').forEach(b=>b.onclick=()=>editProject(b.dataset.projectEdit));
  document.querySelectorAll('[data-project-open]').forEach(b=>b.onclick=()=>{const p=projectList.find(p=>p.id===b.dataset.projectOpen);if(parsed.items.length||wo.length||remoteContractId){if($('#projectCode').value===p.code&&$('#projectName').value===p.name){tab('master');return;}if(!confirm('Ganti ke project "'+p.name+'"? Master/WO yang sedang terbuka dan belum disimpan akan direset.'))return;parsed={items:[],issues:[],skipped:[]};wo=[];sharedDraftMeta=null;selected.clear();collapsed.clear();resetBinding();}$('#projectCode').value=p.code;$('#projectName').value=p.name;$('#contractNo').value=p.contract||'';$('#revision').value=p.revision||'01';$('#contractType').value=p.contractType||'BLANKET_ORDER';renderMaster();renderWo();tab('master');status('Project dipilih. Isi kontrak lalu import master komersial.');loadProjectLocalMaster(p);});
 }
-function editProject(id){const p=projectList.find(p=>p.id===id);editingProject=p?.id||null;$('#projectDialogTitle').textContent=p?'Edit project':'Project baru';for(const [field,key,fallback]of [['pCode','code',''],['pName','name',''],['pClient','client',''],['pLocation','location',''],['pContract','contract',''],['pRevision','revision','01'],['pContractType','contractType','BLANKET_ORDER'],['pStart','startDate',''],['pEnd','endDate',''],['pStatus','state','ACTIVE']])$('#'+field).value=p?.[key]||fallback;$('#projectError').textContent='';$('#projectDialog').showModal();}
+function editProject(id){const p=projectList.find(p=>p.id===id);editingProject=p?.id||null;$('#projectDialogTitle').textContent=p?'Edit project':'Project baru';for(const [field,key,fallback]of [['pCode','code',''],['pName','name',''],['pClient','client',''],['pLocation','location',''],['pContractor','contractorName',''],['pConsultant','supervisorConsultant',''],['pSmmsId','smmsProjectId',''],['pContract','contract',''],['pRevision','revision','01'],['pContractType','contractType','BLANKET_ORDER'],['pStart','startDate',''],['pEnd','endDate',''],['pStatus','state','ACTIVE']])$('#'+field).value=p?.[key]||fallback;$('#projectError').textContent='';$('#projectDialog').showModal();}
 $('#addProject').onclick=()=>editProject();$('#closeProject').onclick=()=>$('#projectDialog').close();$('#projectSearch').oninput=renderProjects;
-$('#projectForm').onsubmit=e=>{e.preventDefault();try{const p={id:editingProject||crypto.randomUUID(),code:$('#pCode').value.trim(),name:$('#pName').value.trim(),client:$('#pClient').value.trim(),location:$('#pLocation').value.trim(),contract:$('#pContract').value.trim(),revision:$('#pRevision').value.trim()||'01',contractType:$('#pContractType').value,startDate:$('#pStart').value,endDate:$('#pEnd').value,state:$('#pStatus').value};if(!p.code||!p.name)throw Error('Kode dan nama wajib diisi.');if((p.startDate&&!p.endDate)||(!p.startDate&&p.endDate))throw Error('Isi Start Date dan End Date untuk periode project.');if(p.startDate&&p.endDate<p.startDate)throw Error('End Date tidak boleh lebih awal dari Start Date.');if(projectList.some(x=>x.id!==p.id&&x.code.toLowerCase()===p.code.toLowerCase()))throw Error('Kode project sudah digunakan.');const next=editingProject?projectList.map(x=>x.id===p.id?p:x):[...projectList,p];localStorage.setItem(projectStorage,JSON.stringify(next));projectList=next;renderProjects();$('#projectDialog').close();status('Identitas project tersimpan di browser ini.');}catch(err){$('#projectError').textContent=err.message}};
-const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects'||name==='progress';if($('#progress'))$('#progress').hidden=name!=='progress';const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.'],progress:['DAILY PROGRESS','Progress Harian','Catat qty selesai per sub-item breakdown, lintas semua item dalam satu SMS.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects')renderProjects();};
+$('#projectForm').onsubmit=async e=>{
+ e.preventDefault();
+ const btn=$('#projectForm').querySelector('button[type="submit"]');
+ try{
+  const p={id:editingProject||crypto.randomUUID(),code:$('#pCode').value.trim(),name:$('#pName').value.trim(),client:$('#pClient').value.trim(),location:$('#pLocation').value.trim(),contractorName:$('#pContractor').value.trim(),supervisorConsultant:$('#pConsultant').value.trim(),smmsProjectId:$('#pSmmsId').value.trim(),contract:$('#pContract').value.trim(),revision:$('#pRevision').value.trim()||'01',contractType:$('#pContractType').value,startDate:$('#pStart').value,endDate:$('#pEnd').value,state:$('#pStatus').value};
+  if(!p.code||!p.name)throw Error('Kode dan nama wajib diisi.');
+  if((p.startDate&&!p.endDate)||(!p.startDate&&p.endDate))throw Error('Isi Start Date dan End Date untuk periode project.');
+  if(p.startDate&&p.endDate<p.startDate)throw Error('End Date tidak boleh lebih awal dari Start Date.');
+  if(projectList.some(x=>x.id!==p.id&&x.code.toLowerCase()===p.code.toLowerCase()))throw Error('Kode project sudah digunakan.');
+  if(!opSession)throw Error('Login dulu buat simpan project ke Supabase.');
+  btn.disabled=true;
+  await api('save_project_info',{code:p.code,name:p.name,client:p.client,location:p.location,contractorName:p.contractorName,supervisorConsultant:p.supervisorConsultant,smmsProjectId:p.smmsProjectId,contractNumber:p.contract,startDate:p.startDate,endDate:p.endDate,status:p.state});
+  await syncProjectsFromSupabase();
+  $('#projectDialog').close();
+  status('Project tersimpan ke Supabase.');
+ }catch(err){$('#projectError').textContent=err.message}
+ finally{btn.disabled=false}
+};
+const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects'||name==='progress';if($('#progress'))$('#progress').hidden=name!=='progress';const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.'],progress:['DAILY PROGRESS','Progress Harian','Catat qty selesai per sub-item breakdown, lintas semua item dalam satu SMS.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects'){if(opSession)syncProjectsFromSupabase();else renderProjects();}};
 renderProjects();tab('projects');
 
 function renderProjectCodeOptions(){

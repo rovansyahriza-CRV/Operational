@@ -311,9 +311,9 @@ async function loadReportHeader(){
  $('#reportHeaderStatus').textContent='';
  try{
   const h=await dailyApi('get_report_header',{woId});
-  $('#rhClient').value=h.client||'Belum diisi -- kelola di Data Proyek';
-  $('#rhContractor').value=h.contractorName||'Belum diisi -- kelola di Data Proyek';
-  $('#rhConsultant').value=h.supervisorConsultant||'Belum diisi -- kelola di Data Proyek';
+  $('#rhClient').value=h.client||'Belum diisi -- kelola di tab Project List';
+  $('#rhContractor').value=h.contractorName||'Belum diisi -- kelola di tab Project List';
+  $('#rhConsultant').value=h.supervisorConsultant||'Belum diisi -- kelola di tab Project List';
   $('#rhContractNumber').value=h.contractNumber||'-';
   $('#rhLocation').value=h.location||'';$('#rhStart').value=h.startDate||'';$('#rhEnd').value=h.endDate||'';
  }catch(err){$('#reportHeaderStatus').textContent='Gagal memuat: '+err.message}
