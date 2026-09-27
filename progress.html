@@ -40,6 +40,58 @@
   <div><label for="progressWo">WO</label><select id="progressWo"><option value="">Pilih WO tersimpan</option></select></div>
   <button id="progressLoadWos" type="button">Muat</button>
  </div>
+
+ <div class="tabs" role="tablist">
+  <button id="tabProgress" type="button" role="tab" class="tab active" aria-selected="true">📋 Progress Harian</button>
+  <button id="tabCheckin" type="button" role="tab" class="tab" aria-selected="false">👷 Check-in Tim</button>
+ </div>
+
+ <div id="checkinPane" hidden>
+  <p id="mpPickWo" class="empty">Pilih WO dulu buat check-in tim.</p>
+  <div id="mpMethodCard" hidden>
+   <label>Mode</label>
+   <div class="field-row" style="margin-bottom:16px">
+    <button id="mpModeIn" type="button" class="primary">🟢 Check In</button>
+    <button id="mpModeOut" type="button">🔴 Check Out</button>
+   </div>
+   <label>Identifikasi anggota tim (langsung tercatat, tanpa PIN lagi)</label>
+   <div class="mp-methods">
+    <button id="mpMethodQr" type="button" class="primary">📷 Scan QR Code</button>
+    <button id="mpMethodFace" type="button" class="primary">📸 Scan Wajah</button>
+    <button id="mpMethodPin" type="button">⌨️ Input PIN</button>
+   </div>
+  </div>
+
+  <div id="mpPinCard" hidden>
+   <p id="mpPinLabel" class="hint"></p>
+   <label for="mpPinInput">PIN anggota tim</label>
+   <input id="mpPinInput" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="12">
+   <button id="mpPinSubmit" type="button" class="primary">Konfirmasi</button>
+   <p id="mpPinStatus" role="alert"></p>
+   <button id="mpCancelMethod1" type="button">← Batal, pilih metode lain</button>
+  </div>
+
+  <div id="mpCamCard" hidden>
+   <p id="mpCamLabel" class="hint"></p>
+   <div id="mpCamWrap">
+    <video id="mpVideo" autoplay muted playsinline></video>
+    <canvas id="mpCanvas" hidden></canvas>
+   </div>
+   <p id="mpCamStatus" role="status"></p>
+   <div class="field-row">
+    <button id="mpCamScan" type="button" class="primary">Scan Sekarang</button>
+    <button id="mpCamSwitch" type="button">🔄 Kamera</button>
+   </div>
+   <button id="mpCancelMethod2" type="button">← Batal, pilih metode lain</button>
+  </div>
+
+  <p id="mpResult" role="status"></p>
+
+  <h2>Tim aktif di WO ini</h2>
+  <div id="mpActiveList"><p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p></div>
+ </div>
+
+ <div id="progressPane">
  <div class="field-row">
   <div><label for="progressSms">SMS</label><select id="progressSms" disabled><option value="">Pilih SMS tersimpan</option></select></div>
   <button id="progressLoadSms" type="button" disabled>Muat</button>
@@ -114,9 +166,11 @@
   <p id="reportDriveStatus" role="status"></p>
   <button id="progressBackToEdit" type="button">← Kembali isi progress</button>
  </div>
+ </div>
 </section>
 
 <p id="status" role="status" aria-live="polite"></p>
 <script src="progress.js" defer></script>
+<script src="checkin.js" defer></script>
 </body>
 </html>

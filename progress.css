@@ -71,6 +71,13 @@ section h2{font-size:15px;margin:20px 0 10px}
 .shift-block{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
 .shift-block label{margin-top:6px}
 .shift-block label:first-child{margin-top:0}
+.tabs{display:flex;gap:6px;margin:4px 0 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px}
+.tabs .tab{flex:1;border:none;background:transparent;padding:10px 8px;font-weight:600;color:var(--muted)}
+.tabs .tab.active{background:var(--primary);color:#fff}
+.mp-methods{display:flex;flex-direction:column;gap:8px}
+#mpPinSubmit,#mpCancelMethod1,#mpCancelMethod2{width:100%;margin-top:8px}
+#mpCamWrap{position:relative;width:100%;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#0B0D10;margin-bottom:10px}
+#mpVideo{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 .shift-block input[readonly]{background:var(--bg);color:var(--muted)}
 .report-card .rc-shifts{margin-top:8px;font-size:12px;color:var(--muted)}
 .report-card .rc-shifts div{padding:2px 0}
