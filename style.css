@@ -35,3 +35,4 @@ body.auth-locked main,body.auth-locked aside{display:none!important;}
 .project-card-internal .project-code{color:#52606f}
 .project-wo-internal{padding:8px 12px}
 .project-wo-internal .project-wo-title{margin:2px 0 0}
+.project-wos-sub{margin-top:12px}.project-wo-indirect{background:#fffaf2;border-color:#f1e3c8}

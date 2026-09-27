@@ -2,9 +2,9 @@
 // Browser-safe publishable key. No service-role credential belongs in this file.
 const OP_CONFIG={url:'https://nhmpwjriextmbotmvvbu.supabase.co',key:'sb_publishable_XNqLw7iz873TtrLn9ag8dQ_AkL2rImz'};
 let opSession=null,remoteContractId=null,remoteWoId=null,remoteWoStatus=null,remoteContracts=[],sharedDraftMeta=null,revisingSourceWoId=null;
-// WO Non-Project (Divisi 9xx, WO-9xx-XXX) disembunyikan dari semua pilihan WO di Operational --
-// cuma dipakai di SMMS (request). Ciri: punya departemen / kontrak administratif INT-9xx.
-const isInternalWo=w=>!!w.departemen||/^INT-/.test(w.contract_number||'');
+// WO selain DIRECT (Indirect WO-xxx-IND & Non-Project WO-9xx-XXX) disembunyikan dari semua pilihan WO di Operational --
+// cuma dipakai di SMMS (request). Fallback ciri lama: departemen / kontrak administratif INT-9xx.
+const isInternalWo=w=>(!!w.wo_kind&&w.wo_kind!=='DIRECT')||!!w.departemen||/^INT-/.test(w.contract_number||'');
 async function rpc(name,params){const response=await fetch(OP_CONFIG.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:OP_CONFIG.key,'Content-Type':'application/json'},body:JSON.stringify(params)});const body=await response.json().catch(()=>null);if(!response.ok)throw Error(body?.message||'Koneksi gagal ('+response.status+')');return body;}
 async function api(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_api',{p_token:opSession.token,p_action:action,p_data:data});}
 function hasPic(p){return !!opSession?.pic?.some(x=>['all',p.toLowerCase()].includes(String(x).trim().toLowerCase()))}
@@ -532,8 +532,11 @@ function internalWosHtml(p){
 function projectWosHtml(p){
  if(!projectWoTree)return '';
  if(isInternalProject(p))return internalWosHtml(p);
- const wos=projectWoTree.get(p.id)||[],q=$('#projectSearch').value.trim().toLowerCase();
+ // WO Indirect (WO-xxx-IND, biaya PMT/site/mob-demob) ditampilkan terpisah di bawah WO scope.
+ const allWos=projectWoTree.get(p.id)||[],indirect=allWos.filter(w=>w.woKind==='INDIRECT');
+ const wos=allWos.filter(w=>w.woKind!=='INDIRECT'),q=$('#projectSearch').value.trim().toLowerCase();
  const projectHit=!q||(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q);
+ const indirectHtml=indirect.map(w=>`<div class="project-wo project-wo-internal project-wo-indirect"><div class="project-wo-top"><strong>${escapeHtml(w.number)}</strong><span class="tag">INDIRECT</span></div><div class="project-wo-title">Project Indirect / PMT — biaya tim manajemen, site office, mob-demob</div></div>`).join('');
  // Kalau yang cocok cuma WO-nya (bukan project), tampilkan WO yang cocok aja.
  const list=projectHit?wos:wos.filter(w=>(w.number+' '+(w.title||'')).toLowerCase().includes(q));
  const showAll=expandedProjectWos.has(p.id)||!projectHit,shown=showAll?list:list.slice(0,PROJECT_WO_PREVIEW);
@@ -549,6 +552,7 @@ function projectWosHtml(p){
   </div>`).join('')||'<p class="project-wo-empty">Belum ada WO di project ini.</p>'}
   ${!showAll&&list.length>PROJECT_WO_PREVIEW?`<button type="button" class="project-wo-more" data-wo-more="${escapeHtml(p.id)}">Lihat semua ${list.length} WO ▾</button>`:''}
   ${projectHit&&expandedProjectWos.has(p.id)&&list.length>PROJECT_WO_PREVIEW?`<button type="button" class="project-wo-more" data-wo-less="${escapeHtml(p.id)}">Ringkas ▴</button>`:''}
+  ${projectHit&&indirectHtml?`<div class="project-wos-head project-wos-sub">Biaya Indirect Project</div>${indirectHtml}`:''}
  </div>`;
 }
 async function syncProjectsFromSupabase(){

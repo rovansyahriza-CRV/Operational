@@ -283,8 +283,8 @@ let batchDetails=[];
 function pathFor(rows,row){const names=[];let cur=row;while(cur){names.unshift(cur.description);cur=cur.parent_id?rows.find(r=>r.id===cur.parent_id):null}return names.join(' / ')}
 
 $('#progressLoadWos').onclick=busy($('#progressLoadWos'),async()=>{
- // WO Non-Project (Divisi 9xx) cuma dipakai di SMMS (request), gak ditampilkan di Operational.
- const rows=(await api('list_wo')).filter(w=>!w.departemen&&!/^INT-/.test(w.contract_number||''));
+ // WO Indirect (WO-xxx-IND) & Non-Project (WO-9xx-XXX) cuma dipakai di SMMS (request), gak ditampilkan di Operational.
+ const rows=(await api('list_wo')).filter(w=>(!w.wo_kind||w.wo_kind==='DIRECT')&&!w.departemen&&!/^INT-/.test(w.contract_number||''));
  $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
  $('#progressSms').disabled=true;$('#progressLoadSms').disabled=true;
  status(rows.length+' WO tersedia.');
