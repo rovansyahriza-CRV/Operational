@@ -29,3 +29,9 @@ body.auth-locked main,body.auth-locked aside{display:none!important;}
 .project-wo-actions button{flex:1;padding:6px 8px;font-size:12px}
 .project-wo-more{width:100%;font-size:12px;padding:6px}
 .project-wo-empty{font-size:13px;margin:4px 0}
+.project-section-title{grid-column:1/-1;margin:14px 0 0;font-size:16px;padding-top:18px;border-top:1px solid #e1e6ee}
+.project-section-title small{font-weight:400;color:#637084}
+.project-card-internal{background:#fbfcfe}
+.project-card-internal .project-code{color:#52606f}
+.project-wo-internal{padding:8px 12px}
+.project-wo-internal .project-wo-title{margin:2px 0 0}

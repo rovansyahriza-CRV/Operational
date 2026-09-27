@@ -507,16 +507,28 @@ const states={ACTIVE:'Aktif',PLANNING:'Persiapan',CLOSED:'Selesai'};
 // reset tiap reload -- itu sesuai default yang sudah ada (01 / BLANKET_ORDER).
 // WO turunan tiap project (op_dashboard 'wo_tree'). null = gagal/gak ada akses -> bagian WO
 // di kartu project disembunyikan, Project List tetap jalan.
-let projectWoTree=null;const expandedProjectWos=new Set();const PROJECT_WO_PREVIEW=5;
+let projectWoTree=null,projectTypes=new Map();const expandedProjectWos=new Set();const PROJECT_WO_PREVIEW=5;
+const isInternalProject=p=>projectTypes.get(p.id)?.projectType==='INTERNAL';
 async function loadProjectWoTree(){
  try{
-  const rows=await rpc('op_dashboard',{p_token:opSession.token,p_action:'wo_tree',p_data:{}});
+  const data=await rpc('op_dashboard',{p_token:opSession.token,p_action:'wo_tree',p_data:{}});
+  projectTypes=new Map((data.projects||[]).map(x=>[x.id,x]));
   projectWoTree=new Map();
-  for(const w of rows){if(!projectWoTree.has(w.projectId))projectWoTree.set(w.projectId,[]);projectWoTree.get(w.projectId).push(w)}
- }catch(err){projectWoTree=null}
+  for(const w of data.wos||[]){if(!projectWoTree.has(w.projectId))projectWoTree.set(w.projectId,[]);projectWoTree.get(w.projectId).push(w)}
+ }catch(err){projectWoTree=null;projectTypes=new Map()}
+}
+// WO internal (Divisi 9xx): gak punya nilai kontrak/progress -- cukup No., departemen & status.
+function internalWosHtml(p){
+ const wos=projectWoTree?.get(p.id)||[],q=$('#projectSearch').value.trim().toLowerCase();
+ const projectHit=!q||(p.code+' '+p.name+' '+(projectTypes.get(p.id)?.divisi||'')).toLowerCase().includes(q);
+ const list=projectHit?wos:wos.filter(w=>(w.number+' '+w.title+' '+(w.departemen||'')).toLowerCase().includes(q));
+ return `<div class="project-wos"><div class="project-wos-head">WO Departemen <b>${wos.length}</b>${!projectHit?` <small>(${list.length} cocok)</small>`:''}</div>
+  ${list.map(w=>`<div class="project-wo project-wo-internal"><div class="project-wo-top"><strong>${escapeHtml(w.number)}</strong><span class="tag">${escapeHtml(w.status==='APPROVED'?'AKTIF':w.status)}</span></div><div class="project-wo-title">${escapeHtml(w.departemen||w.title)}</div></div>`).join('')||'<p class="project-wo-empty">Belum ada WO departemen.</p>'}
+ </div>`;
 }
 function projectWosHtml(p){
  if(!projectWoTree)return '';
+ if(isInternalProject(p))return internalWosHtml(p);
  const wos=projectWoTree.get(p.id)||[],q=$('#projectSearch').value.trim().toLowerCase();
  const projectHit=!q||(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q);
  // Kalau yang cocok cuma WO-nya (bukan project), tampilkan WO yang cocok aja.
@@ -549,8 +561,12 @@ async function syncProjectsFromSupabase(){
 }
 function renderProjects(){
  renderProjectCodeOptions();
- $('#projectCount').textContent=projectList.length;$('#activeProjectCount').textContent=projectList.filter(p=>p.state==='ACTIVE').length;
- const q=$('#projectSearch').value.toLowerCase();$('#projectCards').innerHTML=projectList.filter(p=>(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q)||(projectWoTree?.get(p.id)||[]).some(w=>(w.number+' '+(w.title||'')).toLowerCase().includes(q))).map(p=>`<article class="project-card"><div class="toolbar"><span class="project-code">${escapeHtml(p.code)}</span><span class="tag">${escapeHtml(states[p.state]||p.state)}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.client||'Client belum diisi')}<br>${escapeHtml(p.location||'Lokasi belum diisi')}</p><p><strong>Kontrak:</strong> ${escapeHtml(p.contract||'Belum diisi')}<br><strong>Periode:</strong> ${escapeHtml(p.startDate||'—')} s/d ${escapeHtml(p.endDate||'—')}</p>${projectWosHtml(p)}<div class="toolbar"><button data-project-open="${escapeHtml(p.id)}" class="primary">Buka master →</button><button data-project-edit="${escapeHtml(p.id)}">Edit</button></div></article>`).join('')||'<div class="empty project-card">Belum ada project yang cocok. Tambahkan identitas project untuk mulai menyusun master komersial.</div>';
+ const clientProjects=projectList.filter(p=>!isInternalProject(p));$('#projectCount').textContent=clientProjects.length;$('#activeProjectCount').textContent=clientProjects.filter(p=>p.state==='ACTIVE').length;
+ const q=$('#projectSearch').value.toLowerCase();const matches=projectList.filter(p=>(p.code+' '+p.name+' '+p.client+' '+(projectTypes.get(p.id)?.divisi||'')).toLowerCase().includes(q)||(projectWoTree?.get(p.id)||[]).some(w=>(w.number+' '+(w.title||'')+' '+(w.departemen||'')).toLowerCase().includes(q)));
+ // Project client dulu, lalu Non-Project (Divisi 9xx) di bagian terpisah.
+ const clientCards=matches.filter(p=>!isInternalProject(p)),internalCards=matches.filter(isInternalProject);
+ const card=p=>{const internal=isInternalProject(p);return `<article class="project-card${internal?' project-card-internal':''}"><div class="toolbar"><span class="project-code">${escapeHtml(p.code)}</span><span class="tag">${internal?'NON-PROJECT':escapeHtml(states[p.state]||p.state)}</span></div><h3>${escapeHtml(p.name)}</h3>${internal?`<p>Divisi: ${escapeHtml(projectTypes.get(p.id)?.divisi||'-')}<br>Biaya overhead departemen, rekap per periode dari tanggal transaksi.</p>`:`<p>${escapeHtml(p.client||'Client belum diisi')}<br>${escapeHtml(p.location||'Lokasi belum diisi')}</p><p><strong>Kontrak:</strong> ${escapeHtml(p.contract||'Belum diisi')}<br><strong>Periode:</strong> ${escapeHtml(p.startDate||'—')} s/d ${escapeHtml(p.endDate||'—')}</p>`}${projectWosHtml(p)}<div class="toolbar">${internal?'<span></span>':`<button data-project-open="${escapeHtml(p.id)}" class="primary">Buka master →</button>`}<button data-project-edit="${escapeHtml(p.id)}">Edit</button></div></article>`};
+ $('#projectCards').innerHTML=(clientCards.map(card).join('')||(internalCards.length?'':'<div class="empty project-card">Belum ada project yang cocok. Tambahkan identitas project untuk mulai menyusun master komersial.</div>'))+(internalCards.length?`<h3 class="project-section-title">Non-Project · Divisi &amp; Departemen <small>(${internalCards.length} divisi, ${internalCards.reduce((a,p)=>a+(projectWoTree.get(p.id)||[]).length,0)} WO)</small></h3>`+internalCards.map(card).join(''):'');
  document.querySelectorAll('[data-project-edit]').forEach(b=>b.onclick=()=>editProject(b.dataset.projectEdit));
  document.querySelectorAll('[data-wo-more]').forEach(b=>b.onclick=()=>{expandedProjectWos.add(b.dataset.woMore);renderProjects()});
  document.querySelectorAll('[data-wo-less]').forEach(b=>b.onclick=()=>{expandedProjectWos.delete(b.dataset.woLess);renderProjects()});
