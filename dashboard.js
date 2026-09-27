@@ -148,14 +148,27 @@ function resetDashboard(){
  $('#dbWoList').innerHTML='<p class="empty">Pilih project buat lihat progress per WO.</p>';
 }
 
+// Satu item = satu blok bertumpuk (bukan baris tabel) biar muat di kartu sempit & HP.
+// progress null = item belum punya breakdown ber-target.
+function itemBlock(code,description,weight,progress,earned,amount,isTotal=false){
+ return `<div class="db-item${isTotal?' db-item-total':''}">
+  <div class="db-item-head"><strong>${escapeHtml(code)}</strong>${description?` <span class="pc-path">${escapeHtml(description)}</span>`:''}</div>
+  <div class="db-item-stats">
+   <div><span>Bobot</span><b>${pct(weight)}</b></div>
+   <div><span>Progress</span><b>${progress==null?'—':pct(progress)}</b>${progress==null?'<small>belum ada breakdown</small>':''}</div>
+   <div><span>Nilai progres</span><b>${rupiahFull(earned)}</b><small>dari ${rupiahFull(amount)}</small></div>
+  </div>
+  ${progress==null?'':`<div class="db-mini"><div style="width:${Math.min(100,progress)}%"></div></div>`}
+ </div>`;
+}
 function renderWoDetail(box,wo,detail){
  const today=parseDate(dbData.today);
  box.innerHTML=`<h3 class="db-sub">Kurva-S (kumulatif)</h3><div class="db-chart"></div>
   <h3 class="db-sub">Progress per item</h3>
-  <div class="db-table-wrap"><table class="db-table"><thead><tr><th>Item</th><th class="num">Bobot</th><th class="num">Progress</th><th class="num">Nilai progres</th></tr></thead><tbody>
-  ${detail.items.map(i=>`<tr><td><strong>${escapeHtml(i.code)}</strong><br><span class="pc-path">${escapeHtml(i.description)}</span></td><td class="num">${pct(i.weight*100)}</td><td class="num">${i.leafCount?pct(i.progress*100)+`<div class="db-mini"><div style="width:${Math.min(100,i.progress*100)}%"></div></div>`:'<span class="pc-path">belum ada breakdown</span>'}</td><td class="num">${rupiahFull(Number(i.amount||0)*(i.progress||0))}<br><span class="pc-path">dari ${rupiahFull(i.amount)}</span></td></tr>`).join('')}
-  <tr class="db-total"><td>Total</td><td class="num">100%</td><td class="num">${pct(wo.progress*100)}</td><td class="num">${rupiahFull(wo.progress*Number(wo.value||0))}<br><span class="pc-path">dari ${rupiahFull(wo.value)}</span></td></tr>
-  </tbody></table></div>`;
+  <div class="db-items">
+  ${detail.items.map(i=>itemBlock(i.code,i.description,i.weight*100,i.leafCount?i.progress*100:null,Number(i.amount||0)*(i.progress||0),i.amount)).join('')}
+  ${itemBlock('Total WO','',100,wo.progress*100,wo.progress*Number(wo.value||0),wo.value,true)}
+  </div>`;
  renderSCurve(box.querySelector('.db-chart'),wo,detail.series,today);
 }
 
