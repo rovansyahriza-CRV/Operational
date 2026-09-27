@@ -38,7 +38,15 @@ function showTab(tab,refresh=true){
  else refreshManpowerForDate();
 }
 for(const name of Object.keys(TABS))$(TABS[name][0]).onclick=()=>showTab(name);
-// Tab awal dari #hash dipasang di dashboard.js (script terakhir), karena enterDashboard ada di sana.
+
+// --- Glue Dashboard (dashboard.js) buat halaman ini ---
+window.dashboardOpenWo=async woId=>{
+ if(await selectProgressWo(woId)){showTab('progress');window.scrollTo({top:0,behavior:'smooth'})}
+};
+// Pas login selesai (progressSection jadi kelihatan) dan tab aktif Dashboard, langsung muat.
+new MutationObserver(()=>{if(!$('#progressSection').hidden&&activeTab==='dashboard')enterDashboard()})
+ .observe($('#progressSection'),{attributes:true,attributeFilter:['hidden']});
+$('#logout').addEventListener('click',()=>resetDashboard());
 
 // PIC/Foreman udah login pakai username+password -- itu cukup buat identitas DIA SENDIRI, jadi
 // begitu buka tab Check-in dengan WO terpilih, dia otomatis check-in (sekali per WO per buka
@@ -229,3 +237,7 @@ async function refreshActiveList(){
  const rows=await manpowerApi('active_checkins',{woId});
  $('#mpActiveList').innerHTML=rows.map(r=>`<div class="mp-card"><span class="mp-name">${escapeHtml(r.employee_name)}</span><span class="mp-time">Masuk ${new Date(r.check_in_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')||'<p class="empty">Belum ada yang check-in di WO ini.</p>';
 }
+
+// Tab awal dari link: progress.html#dashboard / #checkin (manpower.html lama -> #checkin).
+if(location.hash==='#checkin')showTab('checkin');
+else if(location.hash==='#dashboard')showTab('dashboard');

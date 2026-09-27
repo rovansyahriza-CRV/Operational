@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="progress.css">
+<link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
 <header>
@@ -42,7 +43,7 @@
   <button id="tabCheckin" type="button" role="tab" class="tab" aria-selected="false">👷 Check-in</button>
  </div>
 
- <div id="dashboardPane" hidden>
+ <div id="dashboardPane" class="db-root" hidden>
   <div class="field-row">
    <div><label for="dbProject">Project</label><select id="dbProject"><option value="">Pilih project</option></select></div>
    <button id="dbRefresh" type="button">Muat ulang</button>
@@ -182,7 +183,7 @@
 
 <p id="status" role="status" aria-live="polite"></p>
 <script src="progress.js" defer></script>
-<script src="checkin.js" defer></script>
 <script src="dashboard.js" defer></script>
+<script src="checkin.js" defer></script>
 </body>
 </html>

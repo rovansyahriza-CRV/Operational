@@ -543,7 +543,7 @@ $('#projectForm').onsubmit=async e=>{
  }catch(err){$('#projectError').textContent=err.message}
  finally{btn.disabled=false}
 };
-const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects'||name==='progress';if($('#progress'))$('#progress').hidden=name!=='progress';const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.'],progress:['DAILY PROGRESS','Progress Harian','Catat qty selesai per sub-item breakdown, lintas semua item dalam satu SMS.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects'){if(opSession)syncProjectsFromSupabase();else renderProjects();}};
+const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding').hidden=name==='projects'||name==='progress'||name==='dashboard';if($('#progress'))$('#progress').hidden=name!=='progress';if($('#dashboard')){$('#dashboard').hidden=name!=='dashboard';if(name==='dashboard'){$('#contractContext').hidden=true;enterDashboard();}}const copy={projects:['PROJECT WORKSPACE','Project List','Kelola project, kontrak, dan pekerjaan dalam satu tempat.'],master:['CONTRACT & PRICING','Master Commercial','Import remunerasi, tinjau struktur item, dan siapkan tarif pekerjaan.'],wo:['WORK EXECUTION','WO–SMS','Susun scope, kelola referensi approval, dan siapkan dokumen cetak.'],progress:['DAILY PROGRESS','Progress Harian','Catat qty selesai per sub-item breakdown, lintas semua item dalam satu SMS.'],dashboard:['PROJECT MONITORING','Dashboard','Progress per WO: realisasi vs rencana, kurva-S, dan progress per item.']}[name];if(copy){$('#pageEyebrow').textContent=copy[0];$('#pageTitle').textContent=copy[1];$('#pageDescription').textContent=copy[2];}if(name==='projects'){if(opSession)syncProjectsFromSupabase();else renderProjects();}};
 renderProjects();tab('projects');
 
 function renderProjectCodeOptions(){
@@ -643,7 +643,7 @@ $('#employeeSearch').addEventListener('input',()=>{
 $('#loginDialog').addEventListener('close',()=>{clearTimeout(employeeSearchTimer);++employeeSearchVersion;$('#employeeSuggestions').hidden=true;$('#employeePassword').value='';});
 
 const renderAuthControls=authUi,openWorkspaceTab=tab;
-function canOpenPage(name){return !!opSession && (name==='wo'?hasPic('Operational WO'):name==='progress'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'&&hasPic('Operational Master Komersial'));}
+function canOpenPage(name){return !!opSession && (name==='wo'||name==='progress'||name==='dashboard'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'&&hasPic('Operational Master Komersial'));}
 tab=function(name){if(canOpenPage(name))openWorkspaceTab(name);};
 authUi=function(){
  renderAuthControls();const locked=!opSession;
@@ -657,3 +657,7 @@ authUi=function(){
 $('#loginDialog').addEventListener('cancel',e=>{if(!opSession)e.preventDefault();});
 setInterval(()=>{if(opSession&&Date.parse(opSession.expiresAt)<=Date.now()){opSession=null;authUi();$('#loginError').textContent='Sesi berakhir. Silakan login kembali.';}},1000);
 authUi();
+// Glue menu "05 Dashboard" (dashboard.js, dimuat sesudah file ini): tombol "Buka Progress"
+// pindah ke Daily Progress dengan WO terpilih; logout ngosongin data dashboard.
+window.dashboardOpenWo=async woId=>{tab('progress');if(await selectProgressWo(woId))window.scrollTo({top:0,behavior:'smooth'})};
+$('#logout').addEventListener('click',()=>{if(typeof resetDashboard==='function')resetDashboard()});

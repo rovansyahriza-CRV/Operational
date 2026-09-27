@@ -1,13 +1,15 @@
 'use strict';
-// Tab "Dashboard" di progress.html: pilih project -> progress per WO (realisasi vs rencana)
-// + kurva-S & rincian item per WO. Numpang login/rpc/showTab dari progress.js & checkin.js.
+// Dashboard: pilih project -> progress per WO (realisasi vs rencana) + kurva-S & rincian item.
+// Dipakai dua halaman: menu "05 Dashboard" di index.html (panel desktop) dan tab Dashboard di
+// progress.html (HP). Butuh global $, escapeHtml, rpc, opSession, busy, status dari halamannya
+// + elemen #dbProject/#dbRefresh/#dbSummary/#dbWoList. Halaman boleh pasang
+// window.dashboardOpenWo(woId) buat tombol "Buka Progress".
 async function dashboardApi(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_dashboard',{p_token:opSession.token,p_action:action,p_data:data})}
 const DAY_MS=86400000;
 const pct=v=>(v==null?'—':(Math.round(v*10)/10).toLocaleString('id-ID',{minimumFractionDigits:1,maximumFractionDigits:1})+'%');
 const rupiah=v=>{const n=Number(v)||0;if(n>=1e9)return 'Rp '+(n/1e9).toLocaleString('id-ID',{maximumFractionDigits:2})+' M';if(n>=1e6)return 'Rp '+(n/1e6).toLocaleString('id-ID',{maximumFractionDigits:1})+' jt';return 'Rp '+n.toLocaleString('id-ID')};
 const parseDate=s=>s?new Date(s+'T00:00:00'):null;
 const fmtDate=d=>d.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
-const isoDate=d=>localDateOf(d);
 // Deviasi lebih buruk dari ini (poin %) dianggap terlambat.
 const LATE_THRESHOLD=-5;
 
@@ -89,7 +91,7 @@ function renderDashboard(){
 
 $('#dbWoList').addEventListener('click',async e=>{
  const openBtn=e.target.closest('[data-db-open]');
- if(openBtn){await openWoInProgress(openBtn.dataset.dbOpen);return}
+ if(openBtn){if(window.dashboardOpenWo)await window.dashboardOpenWo(openBtn.dataset.dbOpen);return}
  const detailBtn=e.target.closest('[data-db-detail]');
  if(!detailBtn)return;
  const card=detailBtn.closest('.db-wo'),box=card.querySelector('.db-detail'),woId=detailBtn.dataset.dbDetail;
@@ -102,13 +104,18 @@ $('#dbWoList').addEventListener('click',async e=>{
  }catch(err){box.innerHTML='<p class="empty">Gagal memuat: '+escapeHtml(err.message)+'</p>'}
 });
 
-// Lompat ke tab Progress dengan WO ini terpilih (muat daftar WO dulu kalau belum).
-async function openWoInProgress(woId){
+// Pilih WO di dropdown #progressWo halaman ini (muat daftar WO dulu kalau belum ada).
+// Dipakai glue tiap halaman buat tombol "Buka Progress". true kalau WO ketemu.
+async function selectProgressWo(woId){
  if(![...$('#progressWo').options].some(o=>o.value===woId))await $('#progressLoadWos').onclick();
- if(![...$('#progressWo').options].some(o=>o.value===woId)){status('WO tidak ada di daftar WO kamu.');return}
- showTab('progress');
+ if(![...$('#progressWo').options].some(o=>o.value===woId)){status('WO tidak ada di daftar WO kamu.');return false}
  if($('#progressWo').value!==woId){$('#progressWo').value=woId;$('#progressWo').dispatchEvent(new Event('change'))}
- window.scrollTo({top:0,behavior:'smooth'});
+ return true;
+}
+function resetDashboard(){
+ dbProjectsLoaded=false;dbData=null;dbDetailCache.clear();dbLoadVersion++;
+ $('#dbProject').innerHTML='<option value="">Pilih project</option>';$('#dbSummary').innerHTML='';
+ $('#dbWoList').innerHTML='<p class="empty">Pilih project buat lihat progress per WO.</p>';
 }
 
 function renderWoDetail(box,wo,detail){
@@ -167,16 +174,3 @@ function renderSCurve(el,wo,series,today){
  });
  svg.querySelector('.db-hit').addEventListener('pointerleave',()=>{cross.setAttribute('visibility','hidden');tip.hidden=true});
 }
-
-// Pas login selesai (progressSection jadi kelihatan) dan tab aktif Dashboard, langsung muat.
-new MutationObserver(()=>{if(!$('#progressSection').hidden&&activeTab==='dashboard')enterDashboard()})
- .observe($('#progressSection'),{attributes:true,attributeFilter:['hidden']});
-$('#logout').addEventListener('click',()=>{
- dbProjectsLoaded=false;dbData=null;dbDetailCache.clear();dbLoadVersion++;
- $('#dbProject').innerHTML='<option value="">Pilih project</option>';$('#dbSummary').innerHTML='';
- $('#dbWoList').innerHTML='<p class="empty">Pilih project buat lihat progress per WO.</p>';
-});
-
-// Tab awal dari link: progress.html#dashboard / #checkin (manpower.html lama -> #checkin).
-if(location.hash==='#checkin')showTab('checkin');
-else if(location.hash==='#dashboard')showTab('dashboard');
