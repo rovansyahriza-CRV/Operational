@@ -36,14 +36,25 @@
 </section>
 
 <section id="progressSection" hidden>
- <div class="field-row">
-  <div><label for="progressWo">WO</label><select id="progressWo"><option value="">Pilih WO tersimpan</option></select></div>
-  <button id="progressLoadWos" type="button">Muat</button>
+ <div class="tabs" role="tablist">
+  <button id="tabDashboard" type="button" role="tab" class="tab" aria-selected="false">📊 Dashboard</button>
+  <button id="tabProgress" type="button" role="tab" class="tab active" aria-selected="true">📋 Progress</button>
+  <button id="tabCheckin" type="button" role="tab" class="tab" aria-selected="false">👷 Check-in</button>
  </div>
 
- <div class="tabs" role="tablist">
-  <button id="tabProgress" type="button" role="tab" class="tab active" aria-selected="true">📋 Progress Harian</button>
-  <button id="tabCheckin" type="button" role="tab" class="tab" aria-selected="false">👷 Check-in Tim</button>
+ <div id="dashboardPane" hidden>
+  <div class="field-row">
+   <div><label for="dbProject">Project</label><select id="dbProject"><option value="">Pilih project</option></select></div>
+   <button id="dbRefresh" type="button">Muat ulang</button>
+  </div>
+  <div id="dbSummary"></div>
+  <div id="dbWoList"><p class="empty">Pilih project buat lihat progress per WO.</p></div>
+  <p class="hint">Progress WO = rata-rata progress item SMS, dibobot nilai item (Rp). Progress item = rata-rata qty tercatat ÷ target sub-item. Rencana = garis lurus dari Mulai WO sampai Akhir WO (Detail Laporan).</p>
+ </div>
+
+ <div id="woBar" class="field-row">
+  <div><label for="progressWo">WO</label><select id="progressWo"><option value="">Pilih WO tersimpan</option></select></div>
+  <button id="progressLoadWos" type="button">Muat</button>
  </div>
 
  <div id="checkinPane" hidden>
@@ -172,5 +183,6 @@
 <p id="status" role="status" aria-live="polite"></p>
 <script src="progress.js" defer></script>
 <script src="checkin.js" defer></script>
+<script src="dashboard.js" defer></script>
 </body>
 </html>

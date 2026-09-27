@@ -22,21 +22,23 @@ function loadLib(name){
 
 // --- Tab ---
 let activeTab='progress';
+const TABS={dashboard:['#tabDashboard','#dashboardPane'],progress:['#tabProgress','#progressPane'],checkin:['#tabCheckin','#checkinPane']};
 function showTab(tab,refresh=true){
  activeTab=tab;
- $('#progressPane').hidden=tab!=='progress';
- $('#checkinPane').hidden=tab!=='checkin';
- for(const [id,name] of [['#tabProgress','progress'],['#tabCheckin','checkin']]){
-  $(id).classList.toggle('active',tab===name);$(id).setAttribute('aria-selected',String(tab===name));
+ for(const [name,[tabId,paneId]] of Object.entries(TABS)){
+  $(paneId).hidden=tab!==name;
+  $(tabId).classList.toggle('active',tab===name);$(tabId).setAttribute('aria-selected',String(tab===name));
  }
- try{history.replaceState(null,'',tab==='checkin'?'#checkin':location.pathname+location.search)}catch(err){}
- if(!refresh)stopMpCamera();
- else if(tab==='checkin')enterCheckin();
- else{stopMpCamera();refreshManpowerForDate()}
+ $('#woBar').hidden=tab==='dashboard'; // Dashboard pilih project sendiri, bukan WO
+ try{history.replaceState(null,'',tab==='progress'?location.pathname+location.search:'#'+tab)}catch(err){}
+ if(tab!=='checkin'||!refresh)stopMpCamera();
+ if(!refresh)return;
+ if(tab==='checkin')enterCheckin();
+ else if(tab==='dashboard')enterDashboard();
+ else refreshManpowerForDate();
 }
-$('#tabProgress').onclick=()=>showTab('progress');
-$('#tabCheckin').onclick=()=>showTab('checkin');
-if(location.hash==='#checkin')showTab('checkin');
+for(const name of Object.keys(TABS))$(TABS[name][0]).onclick=()=>showTab(name);
+// Tab awal dari #hash dipasang di dashboard.js (script terakhir), karena enterDashboard ada di sana.
 
 // PIC/Foreman udah login pakai username+password -- itu cukup buat identitas DIA SENDIRI, jadi
 // begitu buka tab Check-in dengan WO terpilih, dia otomatis check-in (sekali per WO per buka
