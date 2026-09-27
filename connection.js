@@ -505,10 +505,41 @@ const states={ACTIVE:'Aktif',PLANNING:'Persiapan',CLOSED:'Selesai'};
 // biar Owner/Kontraktor/Konsultan sekali input dan otomatis kepake di Daily Progress juga.
 // revision/contractType TETAP cuma prefill lokal (gak ada kolomnya di operational.projects),
 // reset tiap reload -- itu sesuai default yang sudah ada (01 / BLANKET_ORDER).
+// WO turunan tiap project (op_dashboard 'wo_tree'). null = gagal/gak ada akses -> bagian WO
+// di kartu project disembunyikan, Project List tetap jalan.
+let projectWoTree=null;const expandedProjectWos=new Set();const PROJECT_WO_PREVIEW=5;
+async function loadProjectWoTree(){
+ try{
+  const rows=await rpc('op_dashboard',{p_token:opSession.token,p_action:'wo_tree',p_data:{}});
+  projectWoTree=new Map();
+  for(const w of rows){if(!projectWoTree.has(w.projectId))projectWoTree.set(w.projectId,[]);projectWoTree.get(w.projectId).push(w)}
+ }catch(err){projectWoTree=null}
+}
+function projectWosHtml(p){
+ if(!projectWoTree)return '';
+ const wos=projectWoTree.get(p.id)||[],q=$('#projectSearch').value.trim().toLowerCase();
+ const projectHit=!q||(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q);
+ // Kalau yang cocok cuma WO-nya (bukan project), tampilkan WO yang cocok aja.
+ const list=projectHit?wos:wos.filter(w=>(w.number+' '+(w.title||'')).toLowerCase().includes(q));
+ const showAll=expandedProjectWos.has(p.id)||!projectHit,shown=showAll?list:list.slice(0,PROJECT_WO_PREVIEW);
+ const rp=v=>'Rp '+Math.round(Number(v)||0).toLocaleString('id-ID'),pc=v=>(Math.round(v*1000)/10).toLocaleString('id-ID',{minimumFractionDigits:1})+'%';
+ const d=s=>s?new Date(s+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'2-digit'}):'—';
+ return `<div class="project-wos"><div class="project-wos-head">Work Order <b>${wos.length}</b>${!projectHit?` <small>(${list.length} cocok)</small>`:''}</div>
+  ${shown.map(w=>`<div class="project-wo">
+   <div class="project-wo-top"><strong>${escapeHtml(w.number)}</strong><span class="tag">${escapeHtml(w.status)}</span></div>
+   <div class="project-wo-title">${escapeHtml(w.title||'-')}</div>
+   <div class="project-wo-bar" title="Progress ${pc(w.progress)}"><i style="width:${Math.min(100,w.progress*100)}%"></i></div>
+   <div class="project-wo-meta"><span>${pc(w.progress)} · ${rp(w.value*w.progress)} dari ${rp(w.value)}</span><span>${d(w.startDate)} – ${d(w.endDate)}</span></div>
+   <div class="project-wo-actions"><button type="button" data-wo-open="${escapeHtml(w.id)}">Buka WO</button><button type="button" data-wo-progress="${escapeHtml(w.id)}">Progress →</button></div>
+  </div>`).join('')||'<p class="project-wo-empty">Belum ada WO di project ini.</p>'}
+  ${!showAll&&list.length>PROJECT_WO_PREVIEW?`<button type="button" class="project-wo-more" data-wo-more="${escapeHtml(p.id)}">Lihat semua ${list.length} WO ▾</button>`:''}
+  ${projectHit&&expandedProjectWos.has(p.id)&&list.length>PROJECT_WO_PREVIEW?`<button type="button" class="project-wo-more" data-wo-less="${escapeHtml(p.id)}">Ringkas ▴</button>`:''}
+ </div>`;
+}
 async function syncProjectsFromSupabase(){
  if(!opSession)return;
  try{
-  const rows=await api('list_projects');
+  const [rows]=await Promise.all([api('list_projects'),loadProjectWoTree()]);
   projectList=rows.map(r=>({id:r.id,code:r.code,name:r.name,client:r.client||'',location:r.location||'',
    contractorName:r.contractorName||'',supervisorConsultant:r.supervisorConsultant||'',smmsProjectId:r.smmsProjectId??'',
    contract:r.contractNumber||'',startDate:r.startDate||'',endDate:r.endDate||'',state:r.status||'ACTIVE',
@@ -519,8 +550,19 @@ async function syncProjectsFromSupabase(){
 function renderProjects(){
  renderProjectCodeOptions();
  $('#projectCount').textContent=projectList.length;$('#activeProjectCount').textContent=projectList.filter(p=>p.state==='ACTIVE').length;
- const q=$('#projectSearch').value.toLowerCase();$('#projectCards').innerHTML=projectList.filter(p=>(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q)).map(p=>`<article class="project-card"><div class="toolbar"><span class="project-code">${escapeHtml(p.code)}</span><span class="tag">${escapeHtml(states[p.state]||p.state)}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.client||'Client belum diisi')}<br>${escapeHtml(p.location||'Lokasi belum diisi')}</p><p><strong>Kontrak:</strong> ${escapeHtml(p.contract||'Belum diisi')}<br><strong>Periode:</strong> ${escapeHtml(p.startDate||'—')} s/d ${escapeHtml(p.endDate||'—')}</p><div class="toolbar"><button data-project-open="${escapeHtml(p.id)}" class="primary">Buka master →</button><button data-project-edit="${escapeHtml(p.id)}">Edit</button></div></article>`).join('')||'<div class="empty project-card">Belum ada project yang cocok. Tambahkan identitas project untuk mulai menyusun master komersial.</div>';
+ const q=$('#projectSearch').value.toLowerCase();$('#projectCards').innerHTML=projectList.filter(p=>(p.code+' '+p.name+' '+p.client).toLowerCase().includes(q)||(projectWoTree?.get(p.id)||[]).some(w=>(w.number+' '+(w.title||'')).toLowerCase().includes(q))).map(p=>`<article class="project-card"><div class="toolbar"><span class="project-code">${escapeHtml(p.code)}</span><span class="tag">${escapeHtml(states[p.state]||p.state)}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.client||'Client belum diisi')}<br>${escapeHtml(p.location||'Lokasi belum diisi')}</p><p><strong>Kontrak:</strong> ${escapeHtml(p.contract||'Belum diisi')}<br><strong>Periode:</strong> ${escapeHtml(p.startDate||'—')} s/d ${escapeHtml(p.endDate||'—')}</p>${projectWosHtml(p)}<div class="toolbar"><button data-project-open="${escapeHtml(p.id)}" class="primary">Buka master →</button><button data-project-edit="${escapeHtml(p.id)}">Edit</button></div></article>`).join('')||'<div class="empty project-card">Belum ada project yang cocok. Tambahkan identitas project untuk mulai menyusun master komersial.</div>';
  document.querySelectorAll('[data-project-edit]').forEach(b=>b.onclick=()=>editProject(b.dataset.projectEdit));
+ document.querySelectorAll('[data-wo-more]').forEach(b=>b.onclick=()=>{expandedProjectWos.add(b.dataset.woMore);renderProjects()});
+ document.querySelectorAll('[data-wo-less]').forEach(b=>b.onclick=()=>{expandedProjectWos.delete(b.dataset.woLess);renderProjects()});
+ document.querySelectorAll('[data-wo-open]').forEach(b=>b.onclick=async()=>{
+  if(!hasPic('Operational WO')){status('Akun ini gak punya akses Operational WO buat buka WO.');return}
+  if(wo.length&&!remoteWoId&&!confirm('Ganti draft WO lokal dengan WO tersimpan?'))return;
+  try{await displayWo(b.dataset.woOpen)}catch(err){status(err.message)}
+ });
+ document.querySelectorAll('[data-wo-progress]').forEach(b=>b.onclick=()=>{
+  if(!hasPic('Operational WO')){status('Akun ini gak punya akses Operational WO buat buka Daily Progress.');return}
+  window.dashboardOpenWo(b.dataset.woProgress);
+ });
  document.querySelectorAll('[data-project-open]').forEach(b=>b.onclick=()=>{const p=projectList.find(p=>p.id===b.dataset.projectOpen);if(parsed.items.length||wo.length||remoteContractId){if($('#projectCode').value===p.code&&$('#projectName').value===p.name){tab('master');return;}if(!confirm('Ganti ke project "'+p.name+'"? Master/WO yang sedang terbuka dan belum disimpan akan direset.'))return;parsed={items:[],issues:[],skipped:[]};wo=[];sharedDraftMeta=null;selected.clear();collapsed.clear();resetBinding();}$('#projectCode').value=p.code;$('#projectName').value=p.name;$('#contractNo').value=p.contract||'';$('#revision').value=p.revision||'01';$('#contractType').value=p.contractType||'BLANKET_ORDER';renderMaster();renderWo();tab('master');status('Project dipilih. Isi kontrak lalu import master komersial.');loadProjectLocalMaster(p);});
 }
 function editProject(id){const p=projectList.find(p=>p.id===id);editingProject=p?.id||null;$('#projectDialogTitle').textContent=p?'Edit project':'Project baru';for(const [field,key,fallback]of [['pCode','code',''],['pName','name',''],['pClient','client',''],['pLocation','location',''],['pContractor','contractorName',''],['pConsultant','supervisorConsultant',''],['pSmmsId','smmsProjectId',''],['pContract','contract',''],['pRevision','revision','01'],['pContractType','contractType','BLANKET_ORDER'],['pStart','startDate',''],['pEnd','endDate',''],['pStatus','state','ACTIVE']])$('#'+field).value=p?.[key]||fallback;$('#projectError').textContent='';$('#projectDialog').showModal();}
