@@ -8,6 +8,8 @@ async function dashboardApi(action,data={}){if(!opSession)throw Error('Login ter
 const DAY_MS=86400000;
 const pct=v=>(v==null?'—':(Math.round(v*10)/10).toLocaleString('id-ID',{minimumFractionDigits:1,maximumFractionDigits:1})+'%');
 const rupiah=v=>{const n=Number(v)||0;if(n>=1e9)return 'Rp '+(n/1e9).toLocaleString('id-ID',{maximumFractionDigits:2})+' M';if(n>=1e6)return 'Rp '+(n/1e6).toLocaleString('id-ID',{maximumFractionDigits:1})+' jt';return 'Rp '+n.toLocaleString('id-ID')};
+// Nilai progres (earned value) ditampilkan penuh sampai rupiah, bukan "jt", biar bisa dicocokkan ke tagihan.
+const rupiahFull=v=>'Rp '+Math.round(Number(v)||0).toLocaleString('id-ID');
 const parseDate=s=>s?new Date(s+'T00:00:00'):null;
 const fmtDate=d=>d.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
 // Deviasi lebih buruk dari ini (poin %) dianggap terlambat.
@@ -87,11 +89,12 @@ function renderDashboard(){
  if(!wos.length){$('#dbWoList').innerHTML='<p class="empty">Project ini belum punya WO.</p>';return}
  const totalValue=wos.reduce((a,w)=>a+Number(w.value||0),0);
  const projectProgress=totalValue>0?wos.reduce((a,w)=>a+w.progress*Number(w.value||0),0)/totalValue*100:wos.reduce((a,w)=>a+w.progress,0)/wos.length*100;
+ const earnedValue=wos.reduce((a,w)=>a+w.progress*Number(w.value||0),0);
  const lateCount=wos.filter(w=>woStatus(w,today).cls==='late').length;
  const teamToday=wos.reduce((a,w)=>a+Number(w.teamToday||0),0);
  $('#dbSummary').innerHTML=`<div class="db-tiles">
   <div class="db-tile"><span class="db-tile-label">Progress project</span><span class="db-tile-value">${pct(projectProgress)}</span></div>
-  <div class="db-tile"><span class="db-tile-label">Nilai WO</span><span class="db-tile-value">${rupiah(totalValue)}</span></div>
+  <div class="db-tile"><span class="db-tile-label">Nilai progres</span><span class="db-tile-value">${rupiah(earnedValue)}</span><small class="db-tile-sub">dari ${rupiah(totalValue)} nilai WO</small></div>
   <div class="db-tile"><span class="db-tile-label">WO terlambat</span><span class="db-tile-value">${lateCount} <small>dari ${wos.length}</small></span></div>
   <div class="db-tile"><span class="db-tile-label">Tim hadir hari ini</span><span class="db-tile-value">${teamToday} <small>orang</small></span></div>
  </div>`;
@@ -104,8 +107,9 @@ function renderDashboard(){
     ${st.plan!=null?`<div class="db-bar-plan" style="left:${st.plan}%" title="Rencana hari ini ${pct(st.plan)}"></div>`:''}
    </div>
    <div class="db-wo-nums"><span><strong>${pct(real)}</strong> realisasi</span>${st.plan!=null?`<span>${pct(st.plan)} rencana</span>`:''}</div>
+   <div class="db-wo-nums db-wo-money"><span><strong>${rupiahFull(w.progress*Number(w.value||0))}</strong></span>${st.plan!=null?`<span>${rupiahFull(st.plan/100*Number(w.value||0))}</span>`:''}</div>
    <div class="db-status db-status-${st.cls}">${escapeHtml(st.label)}</div>
-   <div class="pc-meta">${rupiah(w.value)} · ${w.itemCount} item · Tim hari ini ${w.teamToday} orang · Update terakhir ${w.lastProgressDate?fmtDate(parseDate(w.lastProgressDate)):'belum ada'}${w.startDate&&w.endDate?' · '+fmtDate(parseDate(w.startDate))+' – '+fmtDate(parseDate(w.endDate)):''}</div>
+   <div class="pc-meta">Nilai WO ${rupiahFull(w.value)} · ${w.itemCount} item · Tim hari ini ${w.teamToday} orang · Update terakhir ${w.lastProgressDate?fmtDate(parseDate(w.lastProgressDate)):'belum ada'}${w.startDate&&w.endDate?' · '+fmtDate(parseDate(w.startDate))+' – '+fmtDate(parseDate(w.endDate)):''}</div>
    ${w.itemsNoBreakdown?`<p class="db-warn">⚠ ${w.itemsNoBreakdown} item belum ada breakdown ber-target, dihitung 0%.</p>`:''}
    <div class="db-actions"><button type="button" data-db-detail="${escapeHtml(w.id)}">Kurva-S &amp; item ▾</button><button type="button" class="primary" data-db-open="${escapeHtml(w.id)}">Buka Progress →</button></div>
    <div class="db-detail" hidden></div>
@@ -148,8 +152,9 @@ function renderWoDetail(box,wo,detail){
  const today=parseDate(dbData.today);
  box.innerHTML=`<h3 class="db-sub">Kurva-S (kumulatif)</h3><div class="db-chart"></div>
   <h3 class="db-sub">Progress per item</h3>
-  <div class="db-table-wrap"><table class="db-table"><thead><tr><th>Item</th><th class="num">Bobot</th><th class="num">Progress</th></tr></thead><tbody>
-  ${detail.items.map(i=>`<tr><td><strong>${escapeHtml(i.code)}</strong><br><span class="pc-path">${escapeHtml(i.description)}</span></td><td class="num">${pct(i.weight*100)}</td><td class="num">${i.leafCount?pct(i.progress*100)+`<div class="db-mini"><div style="width:${Math.min(100,i.progress*100)}%"></div></div>`:'<span class="pc-path">belum ada breakdown</span>'}</td></tr>`).join('')}
+  <div class="db-table-wrap"><table class="db-table"><thead><tr><th>Item</th><th class="num">Bobot</th><th class="num">Progress</th><th class="num">Nilai progres</th></tr></thead><tbody>
+  ${detail.items.map(i=>`<tr><td><strong>${escapeHtml(i.code)}</strong><br><span class="pc-path">${escapeHtml(i.description)}</span></td><td class="num">${pct(i.weight*100)}</td><td class="num">${i.leafCount?pct(i.progress*100)+`<div class="db-mini"><div style="width:${Math.min(100,i.progress*100)}%"></div></div>`:'<span class="pc-path">belum ada breakdown</span>'}</td><td class="num">${rupiahFull(Number(i.amount||0)*(i.progress||0))}<br><span class="pc-path">dari ${rupiahFull(i.amount)}</span></td></tr>`).join('')}
+  <tr class="db-total"><td>Total</td><td class="num">100%</td><td class="num">${pct(wo.progress*100)}</td><td class="num">${rupiahFull(wo.progress*Number(wo.value||0))}<br><span class="pc-path">dari ${rupiahFull(wo.value)}</span></td></tr>
   </tbody></table></div>`;
  renderSCurve(box.querySelector('.db-chart'),wo,detail.series,today);
 }
