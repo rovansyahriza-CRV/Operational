@@ -2,6 +2,9 @@
 // Browser-safe publishable key. No service-role credential belongs in this file.
 const OP_CONFIG={url:'https://nhmpwjriextmbotmvvbu.supabase.co',key:'sb_publishable_XNqLw7iz873TtrLn9ag8dQ_AkL2rImz'};
 let opSession=null,remoteContractId=null,remoteWoId=null,remoteWoStatus=null,remoteContracts=[],sharedDraftMeta=null,revisingSourceWoId=null;
+// WO Non-Project (Divisi 9xx, WO-9xx-XXX) disembunyikan dari semua pilihan WO di Operational --
+// cuma dipakai di SMMS (request). Ciri: punya departemen / kontrak administratif INT-9xx.
+const isInternalWo=w=>!!w.departemen||/^INT-/.test(w.contract_number||'');
 async function rpc(name,params){const response=await fetch(OP_CONFIG.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:OP_CONFIG.key,'Content-Type':'application/json'},body:JSON.stringify(params)});const body=await response.json().catch(()=>null);if(!response.ok)throw Error(body?.message||'Koneksi gagal ('+response.status+')');return body;}
 async function api(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_api',{p_token:opSession.token,p_action:action,p_data:data});}
 function hasPic(p){return !!opSession?.pic?.some(x=>['all',p.toLowerCase()].includes(String(x).trim().toLowerCase()))}
@@ -29,7 +32,7 @@ $('#preview').onclick=()=>{
 $('#loginOpen').onclick=()=>$('#loginDialog').showModal();$('#loginClose').onclick=()=>$('#loginDialog').close();
 $('#loginForm').onsubmit=async e=>{e.preventDefault();const b=$('#loginSubmit');b.disabled=true;$('#loginError').textContent='';try{const id=$('#employeeId').value.trim();if(!/^\d+$/.test(id))throw Error('Pilih nama karyawan dari hasil pencarian.');const result=await rpc('op_login',{p_id:id,p_password:$('#employeePassword').value});if(result?.error)throw Error(result.error);opSession=result;$('#employeePassword').value='';$('#loginDialog').close();authUi();status('Login berhasil. Akses mengikuti PIC dan approval mengikuti Author.');syncProjectsFromSupabase();if($('#projectCode').value)refreshSharedDrafts($('#projectCode').value);if(!hasPic('Operational Master Komersial')&&hasPic('Operational WO'))tab('wo')}catch(err){$('#loginError').textContent=err.message;$('#employeePassword').value=''}finally{b.disabled=false}};
 $('#logout').onclick=async()=>{try{if(opSession)await rpc('op_logout',{p_token:opSession.token})}catch(err){status('Koneksi logout gagal; sesi di browser tetap dihapus.')}opSession=null;remoteContractId=null;remoteWoId=null;sharedDraftMeta=null;revisingSourceWoId=null;currentSmsId=null;parsed={items:[],issues:[],skipped:[]};wo=[];setSms();selected.clear();$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>';$('#savedWos').innerHTML='<option value="">Pilih WO tersimpan</option>';$('#savedSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#sharedDrafts').innerHTML='<option value="">Pilih draft tim (Supabase)</option>';$('#sharedDrafts').disabled=true;renderMaster();renderWo();resetBinding();tab('master');status('Sudah keluar. Data yang dimuat telah dibersihkan.')};
-$('#loadContracts').onclick=busy($('#loadContracts'),async()=>{remoteContracts=await api('contracts');$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>'+remoteContracts.map(c=>`<option value="${c.id}">${escapeHtml(c.project_code+' / '+c.number+' / Rev '+c.revision)}</option>`).join('');status(remoteContracts.length+' kontrak tersedia.')});
+$('#loadContracts').onclick=busy($('#loadContracts'),async()=>{remoteContracts=await api('contracts');$('#savedContracts').innerHTML='<option value="">Pilih kontrak tersimpan</option>'+remoteContracts.filter(c=>c.contract_type!=='INTERNAL').map(c=>`<option value="${c.id}">${escapeHtml(c.project_code+' / '+c.number+' / Rev '+c.revision)}</option>`).join('');status(remoteContracts.filter(c=>c.contract_type!=='INTERNAL').length+' kontrak tersedia.')});
 async function loadMaster(cid){const contract=remoteContracts.find(c=>c.id===cid);if(!contract)throw Error('Pilih kontrak terlebih dahulu.');const rows=await api('master',{contractId:cid});remoteContractId=cid;remoteWoId=null;sharedDraftMeta=null;parsed={items:rows.map(i=>({id:i.id,code:i.code,description:i.description,parentId:i.parent_id,rowKind:i.row_kind,unit:i.unit,price:i.unit_price,qty:i.reference_qty,amount:i.source_amount,rate:i.rate_kind,sourceRow:i.source_row})),issues:[],skipped:[]};wo=[];setSms();selected.clear();collapsed.clear();$('#projectCode').value=contract.project_code;$('#projectName').value=contract.project_name;$('#contractNo').value=contract.number;$('#contractType').value=contract.contract_type;$('#revision').value=contract.revision;$('#contractBinding').textContent=contract.number+' · Rev '+contract.revision+' · tersimpan';renderMaster();renderWo();status('Master dimuat dari Supabase.');tab('master')}
 $('#savedContracts').onchange=async e=>{
  if(!e.target.value)return;
@@ -103,7 +106,7 @@ $('#reviseWo').onclick=()=>{
  renderWo();
  status('Mode revisi aktif: ubah qty/hapus/tambah item, lalu klik "Simpan WO ke Supabase" buat simpan sebagai revisi baru.');
 };
-$('#loadWos').onclick=busy($('#loadWos'),async()=>{const rows=await api('list_wo');$('#savedWos').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');status(rows.length+' WO tersedia.')});
+$('#loadWos').onclick=busy($('#loadWos'),async()=>{const rows=await api('list_wo');$('#savedWos').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.filter(w=>!isInternalWo(w)).map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');status(rows.filter(w=>!isInternalWo(w)).length+' WO tersedia.')});
 async function displayWo(id){const data=await api('read_wo',{woId:id});setSms();revisingSourceWoId=null;currentSmsId=null;$('#savedSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';remoteWoId=id;remoteWoStatus=data.header.status;remoteContractId=data.header.contract_id;$('#woNo').value=data.header.number;$('#woTitle').value=data.header.title;wo=data.items.map(i=>({id:i.id,sourceId:i.commercial_item_id,code:i.code_snapshot,description:i.description_snapshot,unit:i.unit_snapshot,price:i.unit_price_snapshot,rate:i.rate_kind_snapshot,package:i.package_name,qty:i.qty,path:[]}));renderWo();$('#woRows').querySelectorAll('input,button').forEach(el=>el.disabled=true);$('#woNo').disabled=true;$('#woTitle').disabled=true;$('#woState').textContent=data.header.status+' · tampilan tersimpan';$('#approveWo').disabled=data.header.status!=='DRAFT';tab('wo');try{const rows=await api('list_sms',{woId:id});$('#savedSms').innerHTML='<option value="">Pilih SMS tersimpan</option>'+rows.map(r=>`<option value="${r.id}">${escapeHtml(r.number+' Rev '+r.revision+' · '+r.status)}</option>`).join('');}catch(err){}}
 $('#savedWos').onchange=async e=>{if(!e.target.value)return;if(wo.length&&!remoteWoId&&!confirm('Ganti draft lokal dengan WO tersimpan?'))return;try{await displayWo(e.target.value)}catch(err){status(err.message)}};
 $('#approveWo').onclick=busy($('#approveWo'),async()=>{if(!confirm('Setujui WO ini? Scope pekerjaan yang disetujui jadi acuan resmi buat SMS berikutnya.'))return;await api('approve_wo',{woId:remoteWoId});await displayWo(remoteWoId);status('WO disetujui. Approval tercatat di audit log.')});
@@ -365,8 +368,8 @@ let batchDetails=[];
 function pathFor(rows,row){const names=[];let cur=row;while(cur){names.unshift(cur.description);cur=cur.parent_id?rows.find(r=>r.id===cur.parent_id):null}return names.join(' / ')}
 $('#progressLoadWos').onclick=busy($('#progressLoadWos'),async()=>{
  const rows=await api('list_wo');
- $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
- status(rows.length+' WO tersedia.');
+ $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.filter(w=>!isInternalWo(w)).map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
+ status(rows.filter(w=>!isInternalWo(w)).length+' WO tersedia.');
 });
 $('#progressWo').addEventListener('change',()=>{$('#progressLoadSms').disabled=!$('#progressWo').value;$('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;});
 $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
@@ -605,7 +608,7 @@ const originalTab=tab;tab=function(name){originalTab(name);$('#contractBinding')
 renderProjects();tab('projects');
 
 function renderProjectCodeOptions(){
- $('#projectCodeOptions').replaceChildren(...projectList.map(p=>new Option(p.name+' / '+(p.client||''),p.code)));
+ $('#projectCodeOptions').replaceChildren(...projectList.filter(p=>!isInternalProject(p)).map(p=>new Option(p.name+' / '+(p.client||''),p.code)));
  const pcInput=$('#projectCode');if(pcInput){pcInput.setAttribute('list','');pcInput.offsetHeight;pcInput.setAttribute('list','projectCodeOptions');}
  $('#projectCodeHint').textContent=projectList.length?'Ketik kode atau nama, lalu pilih project.':'Belum ada project. Tambahkan melalui Project List.';
 }
