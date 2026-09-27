@@ -55,3 +55,4 @@
 .db-mini div{height:100%;background:var(--series-1);border-radius:2px}
 @media (min-width:900px){.db-tiles{grid-template-columns:repeat(4,1fr)}}
 .db-toolbar{align-items:flex-end;margin-bottom:14px}.db-toolbar label{flex:1;min-width:240px;max-width:520px}
+.db-search{display:flex;align-items:center;gap:10px;margin:0 0 12px}.db-search input{flex:1;max-width:520px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);font:inherit;background:var(--card)}.db-search .db-hint{white-space:nowrap}

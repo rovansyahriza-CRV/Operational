@@ -22,6 +22,29 @@ function planAt(wo,date){
 
 let dbProjectsLoaded=false,dbData=null,dbLoadVersion=0;
 const dbDetailCache=new Map();
+
+// Search box No./Judul WO -- dibikin di sini (bukan di HTML) biar sama persis di dua halaman.
+// Filter cuma nyembunyiin kartu, jadi kurva-S yang lagi kebuka gak ketutup pas ngetik.
+const dbSearchWrap=document.createElement('div');
+dbSearchWrap.className='db-search';dbSearchWrap.hidden=true;
+dbSearchWrap.innerHTML='<input id="dbSearch" type="search" placeholder="🔍 Cari No. WO atau judul WO..." autocomplete="off" aria-label="Cari No. WO atau judul WO"><span id="dbSearchCount" class="db-hint" role="status"></span>';
+$('#dbWoList').before(dbSearchWrap);
+function applyWoFilter(){
+ if(!dbData)return;
+ const q=$('#dbSearch').value.trim().toLowerCase();
+ let shown=0;
+ document.querySelectorAll('#dbWoList .db-wo').forEach(card=>{
+  const w=dbData.wos.find(x=>x.id===card.dataset.wo);
+  const match=!q||(w.number+' '+(w.title||'')).toLowerCase().includes(q);
+  card.hidden=!match;if(match)shown++;
+ });
+ let none=$('#dbNoMatch');
+ if(!none){none=document.createElement('p');none.id='dbNoMatch';none.className='empty';$('#dbWoList').append(none)}
+ none.hidden=shown>0||!dbData.wos.length;
+ none.textContent='Gak ada WO yang cocok dengan "'+$('#dbSearch').value.trim()+'".';
+ $('#dbSearchCount').textContent=q?shown+' dari '+dbData.wos.length+' WO':'';
+}
+$('#dbSearch').addEventListener('input',applyWoFilter);
 async function enterDashboard(){
  if(!opSession)return;
  if(!dbProjectsLoaded){
@@ -40,7 +63,7 @@ $('#dbRefresh').onclick=busy($('#dbRefresh'),async()=>{dbDetailCache.clear();if(
 
 async function loadProjectDashboard(){
  const version=++dbLoadVersion,projectId=$('#dbProject').value;
- dbData=null;$('#dbSummary').innerHTML='';
+ dbData=null;$('#dbSummary').innerHTML='';dbSearchWrap.hidden=true;$('#dbSearchCount').textContent='';
  if(!projectId){$('#dbWoList').innerHTML='<p class="empty">Pilih project buat lihat progress per WO.</p>';return}
  $('#dbWoList').innerHTML='<p class="empty">Memuat...</p>';
  try{
@@ -60,6 +83,7 @@ function woStatus(wo,today){
 
 function renderDashboard(){
  const today=parseDate(dbData.today),wos=dbData.wos;
+ dbSearchWrap.hidden=!wos.length;
  if(!wos.length){$('#dbWoList').innerHTML='<p class="empty">Project ini belum punya WO.</p>';return}
  const totalValue=wos.reduce((a,w)=>a+Number(w.value||0),0);
  const projectProgress=totalValue>0?wos.reduce((a,w)=>a+w.progress*Number(w.value||0),0)/totalValue*100:wos.reduce((a,w)=>a+w.progress,0)/wos.length*100;
@@ -87,6 +111,7 @@ function renderDashboard(){
    <div class="db-detail" hidden></div>
   </article>`;
  }).join('');
+ applyWoFilter();
 }
 
 $('#dbWoList').addEventListener('click',async e=>{
@@ -114,6 +139,7 @@ async function selectProgressWo(woId){
 }
 function resetDashboard(){
  dbProjectsLoaded=false;dbData=null;dbDetailCache.clear();dbLoadVersion++;
+ $('#dbSearch').value='';$('#dbSearchCount').textContent='';dbSearchWrap.hidden=true;
  $('#dbProject').innerHTML='<option value="">Pilih project</option>';$('#dbSummary').innerHTML='';
  $('#dbWoList').innerHTML='<p class="empty">Pilih project buat lihat progress per WO.</p>';
 }
