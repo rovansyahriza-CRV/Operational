@@ -16,3 +16,5 @@ Final source correction: user confirmed employee and related SmartGate Fusion4 d
 Applied 20260916060000_pic_author_api.sql after rollback tests: private sessions/audit/rate limit, public op_login/op_logout/op_api, master import and WO save/read/approval. No user roles assigned. Browser tests passed with mock API; live invalid-session request rejected.
 
 Applied 20260916070000_hold_login_and_pic_compatibility.sql: Operational login and session operations intentionally paused due to confirmed anon SELECT on SMMS credential table. No SMMS grants/policies changed. PIC now follows uppercase PIC when populated, falling back to lowercase pic as used across existing apps. Login remains disabled until shared-account hardening is completed.
+
+Applied 20260927010000_wo_weather_main.sql (2026-09-27) after rollback dry-run: new operational.wo_weather (one row per WO/date/shift; RLS on, no anon/authenticated table access) and public.op_weather(list/save) RPC. Backfilled 2 rows from sms_item_weather (no conflicting per-WO values). sms_item_weather kept as archive, no longer written by the app. Applied via direct SQL like previous entries; not registered in schema_migrations.

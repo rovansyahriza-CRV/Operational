@@ -70,6 +70,13 @@
   <div><label for="progressBatchDate">Tanggal</label><input id="progressBatchDate" type="date"></div>
   <button id="progressLoadDetails" type="button" disabled>Muat breakdown</button>
  </div>
+ <h2>Cuaca</h2>
+ <p class="hint" id="weatherSource">Pilih WO dan tanggal. Suhu diisi otomatis dari Lokasi Proyek.</p>
+ <button id="weatherUseGps" type="button" hidden>📍 Pakai lokasi HP buat suhu</button>
+ <div id="weatherShifts"></div>
+ <button id="weatherSave" type="button" class="primary" disabled>Simpan Cuaca</button>
+ <p id="weatherStatus" role="status"></p>
+
  <h2>Tim kerja tanggal ini</h2>
  <div id="progressManpowerList"><p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p></div>
 

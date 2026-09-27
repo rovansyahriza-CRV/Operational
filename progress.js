@@ -82,7 +82,7 @@ $('#logout').onclick=async()=>{
  $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>';
  $('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressSms').disabled=true;
  $('#progressLoadSms').disabled=true;$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;$('#progressViewReport').disabled=true;
- $('#progressSearch').value='';batchDetails=[];keptValues={};itemWeather={};stagedPhotos={};
+ $('#progressSearch').value='';batchDetails=[];keptValues={};stagedPhotos={};woWeather={};autoTemps={};weatherCoords=null;weatherLoadVersion++;$('#weatherShifts').innerHTML='';$('#weatherSave').disabled=true;$('#weatherStatus').textContent='';
  $('#progressBatchList').innerHTML='<p class="empty">Pilih WO dan SMS, lalu muat breakdown.</p>';
  $('#progressManpowerList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat siapa yang check-in.</p>';
  $('#progressMaterialList').innerHTML='<p class="empty">Pilih WO dan tanggal buat lihat material yang diterima.</p>';
@@ -276,7 +276,7 @@ $('#progressBatchDate').addEventListener('change',async()=>{
  await refreshMaterialForDate();
  await refreshMaterialUsageForDate();
  renderEquipmentHistoryForDate();
- if(batchDetails.length){await loadItemWeather();renderBatchList()}
+ await loadWoWeather();
 });
 
 let batchDetails=[];
@@ -295,6 +295,7 @@ $('#progressWo').addEventListener('change',async()=>{
  $('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;
  $('#reportHeaderDetails').hidden=!woId;
  if(woId)await loadReportHeader();
+ weatherCoords=null;loadWoWeather();
  refreshManpowerForDate();
  refreshMaterialForDate();
  refreshMaterialBalance();
@@ -324,6 +325,7 @@ $('#reportHeaderSave').onclick=busy($('#reportHeaderSave'),async()=>{
   woId,location:$('#rhLocation').value.trim(),startDate:$('#rhStart').value,endDate:$('#rhEnd').value
  });
  $('#reportHeaderStatus').textContent='Tersimpan.';
+ weatherCoords=null;loadWoWeather();
 });
 $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  const woId=$('#progressWo').value;if(!woId)return;
@@ -335,20 +337,146 @@ $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
 $('#progressSms').addEventListener('change',()=>{$('#progressLoadDetails').disabled=!$('#progressSms').value;$('#progressViewReport').disabled=true});
 const SHIFTS=['PAGI','SIANG','LEMBUR'];
 const SHIFT_LABELS={PAGI:'Pagi (08:00–12:00)',SIANG:'Siang (13:00–17:00)',LEMBUR:'Lembur (18:00–21:30)'};
-let keptValues={},itemWeather={},stagedPhotos={};
+let keptValues={},stagedPhotos={};
 function showEditMode(){$('#progressEditMode').hidden=false;$('#progressReportMode').hidden=true}
-async function loadItemWeather(){
- const smsId=$('#progressSms').value,date=$('#progressBatchDate').value;
- itemWeather={};
- if(!smsId||!date)return;
- try{
-  const rows=await dailyApi('list_item_weather',{smsId,reportDate:date});
-  rows.forEach(r=>{
-   if(!itemWeather[r.smsItemId])itemWeather[r.smsItemId]={};
-   itemWeather[r.smsItemId][r.shift]={weather:r.weather,temperatureC:r.temperatureC,effectiveHours:r.effectiveHours};
-  });
- }catch(err){}
+
+// --- Cuaca (main, satu per WO/tanggal/shift) ---
+// Kondisi cuaca + jam efektif diisi manual. Suhu otomatis: rata-rata suhu per jam (Open-Meteo,
+// gratis tanpa API key) di jam shift, lokasinya dari Lokasi Proyek WO (geocoding) atau GPS HP.
+const SHIFT_HOURS={PAGI:[8,9,10,11],SIANG:[13,14,15,16],LEMBUR:[18,19,20,21]};
+const SHIFT_MAX_HOURS={PAGI:4,SIANG:4,LEMBUR:3.5};
+let woWeather={},autoTemps={},weatherCoords=null,weatherLoadVersion=0;
+const geocodeCache=new Map();
+async function weatherApi(action,data={}){if(!opSession)throw Error('Login terlebih dahulu.');return rpc('op_weather',{p_token:opSession.token,p_action:action,p_data:data})}
+async function geocodeLocation(text){
+ const key=text.trim().toLowerCase();
+ if(!key)return null;
+ if(geocodeCache.has(key))return geocodeCache.get(key);
+ // Lokasi proyek biasanya teks bebas ("Site Sorowako, Luwu Timur") -- geocoder cuma ngerti
+ // satu nama tempat, jadi coba teks utuh dulu, lalu tiap potongan (dipisah koma), lalu tiap kata.
+ // Geocoder-nya fuzzy ("Site" bisa nyasar ke "Siten, Bantul"), jadi hasil cuma diterima kalau
+ // namanya persis sama. Potongan yang ada kata arah ("Luwu Timur") itu nama wilayah -- katanya
+ // gak dicari satu-satu, biar "Luwu" gak nyasar ke Luwu di NTT.
+ const norm=s=>s.toLowerCase().replace(/^(kabupaten|kab\.?|kota|kecamatan|kec\.?|desa)\s+/,'').trim();
+ const stop=new Set(['site','lokasi','area','proyek','project','blok','block','jalan','kabupaten','kecamatan','kota','desa','provinsi','plant','pabrik','kantor']);
+ const directional=/\b(utara|selatan|timur|barat|tengah|tenggara|barat daya|timur laut)\b/i;
+ const parts=text.split(/[,/()\-–]+/).map(s=>s.trim()).filter(Boolean);
+ const words=parts.filter(p=>!directional.test(p)).flatMap(p=>p.split(/[\s.]+/)).filter(s=>s.length>=4&&!stop.has(s.toLowerCase()));
+ const candidates=[...new Set([text.trim(),...parts,...words])];
+ let found=null;
+ for(const name of candidates){
+  try{
+   const res=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&language=id&countryCode=ID&name='+encodeURIComponent(name));
+   const body=await res.json();
+   const r=(body.results||[]).find(r=>norm(r.name)===norm(name));
+   if(r){found={lat:r.latitude,lon:r.longitude,label:[r.name,r.admin2,r.admin1].filter(Boolean).join(', ')};break}
+  }catch(err){}
+ }
+ geocodeCache.set(key,found);
+ return found;
 }
+async function fetchShiftTemps(lat,lon,date){
+ const qs='?latitude='+lat+'&longitude='+lon+'&hourly=temperature_2m&timezone=auto&start_date='+date+'&end_date='+date;
+ // Forecast API nyakup ~3 bulan ke belakang & 16 hari ke depan; lebih lama dari itu pakai arsip.
+ let res=await fetch('https://api.open-meteo.com/v1/forecast'+qs);
+ if(!res.ok)res=await fetch('https://archive-api.open-meteo.com/v1/archive'+qs);
+ if(!res.ok)throw Error('Data suhu tidak tersedia untuk tanggal ini');
+ const body=await res.json(),times=body.hourly?.time||[],temps=body.hourly?.temperature_2m||[];
+ const out={};
+ for(const s of SHIFTS){
+  const vals=times.map((t,i)=>SHIFT_HOURS[s].includes(Number(t.slice(11,13)))?temps[i]:null).filter(v=>v!=null);
+  out[s]=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10:null;
+ }
+ return out;
+}
+async function refreshAutoTemps(version){
+ const date=$('#progressBatchDate').value;
+ autoTemps={};
+ if(!weatherCoords){
+  const location=$('#rhLocation').value.trim();
+  weatherCoords=location?await geocodeLocation(location):null;
+  if(version!==weatherLoadVersion)return;
+  if(!weatherCoords){
+   $('#weatherSource').textContent=location?'Lokasi Proyek "'+location+'" gak ketemu di peta, suhu gak bisa otomatis.':'Lokasi Proyek belum diisi (Detail Laporan), suhu gak bisa otomatis.';
+   $('#weatherUseGps').hidden=!navigator.geolocation;
+   return;
+  }
+ }
+ $('#weatherUseGps').hidden=true;
+ try{
+  const temps=await fetchShiftTemps(weatherCoords.lat,weatherCoords.lon,date);
+  if(version!==weatherLoadVersion)return;
+  autoTemps=temps;
+  $('#weatherSource').textContent='Suhu otomatis dari: '+weatherCoords.label+' (Open-Meteo).';
+ }catch(err){
+  if(version!==weatherLoadVersion)return;
+  $('#weatherSource').textContent='Gagal ambil suhu otomatis ('+err.message+').';
+ }
+}
+function renderWeather(){
+ $('#weatherShifts').innerHTML=SHIFTS.map(s=>{
+  const cur=woWeather[s]||{};
+  const temp=autoTemps[s]??cur.temperatureC??'';
+  return `<div class="shift-block">
+   <label>${SHIFT_LABELS[s]} — Cuaca</label>
+   <select data-weather-shift="${s}">
+    <option value="">- pilih -</option>
+    ${Object.entries(WEATHER_LABELS).map(([v,l])=>`<option value="${v}" ${cur.weather===v?'selected':''}>${l}</option>`).join('')}
+   </select>
+   <div class="field-row">
+    <div><label>Suhu (°C, otomatis)</label><input type="number" readonly data-weather-temp="${s}" value="${temp}"></div>
+    <div><label>Jam Efektif (maks ${SHIFT_MAX_HOURS[s]})</label><input type="number" step="0.5" min="0" max="${SHIFT_MAX_HOURS[s]}" inputmode="decimal" data-weather-hours="${s}" value="${cur.effectiveHours??''}"></div>
+   </div>
+  </div>`;
+ }).join('');
+}
+async function loadWoWeather(){
+ const version=++weatherLoadVersion;
+ const woId=$('#progressWo').value,date=$('#progressBatchDate').value;
+ woWeather={};autoTemps={};$('#weatherStatus').textContent='';
+ if(!woId||!date){
+  $('#weatherShifts').innerHTML='';$('#weatherSave').disabled=true;$('#weatherUseGps').hidden=true;
+  $('#weatherSource').textContent='Pilih WO dan tanggal. Suhu diisi otomatis dari Lokasi Proyek.';
+  return;
+ }
+ $('#weatherSource').textContent='Mengambil suhu...';
+ renderWeather();
+ const [rows]=await Promise.all([
+  weatherApi('list',{woId,reportDate:date}).catch(err=>{$('#weatherStatus').textContent='Gagal memuat cuaca: '+err.message;return []}),
+  refreshAutoTemps(version)
+ ]);
+ if(version!==weatherLoadVersion)return;
+ rows.forEach(r=>{woWeather[r.shift]=r});
+ renderWeather();
+ $('#weatherSave').disabled=false;
+}
+$('#weatherUseGps').onclick=()=>{
+ $('#weatherSource').textContent='Mengambil lokasi HP...';
+ navigator.geolocation.getCurrentPosition(async pos=>{
+  weatherCoords={lat:pos.coords.latitude,lon:pos.coords.longitude,label:'lokasi HP ('+pos.coords.latitude.toFixed(3)+', '+pos.coords.longitude.toFixed(3)+')'};
+  const version=++weatherLoadVersion;
+  await refreshAutoTemps(version);
+  if(version===weatherLoadVersion)renderWeather();
+ },err=>{$('#weatherSource').textContent='Lokasi HP gak bisa diambil: '+err.message},{enableHighAccuracy:false,timeout:15000});
+};
+$('#weatherSave').onclick=busy($('#weatherSave'),async()=>{
+ const woId=$('#progressWo').value,reportDate=$('#progressBatchDate').value;
+ if(!woId||!reportDate){status('Pilih WO dan tanggal dulu.');return}
+ let saved=0,errors=[];
+ for(const s of SHIFTS){
+  const weather=document.querySelector(`[data-weather-shift="${s}"]`).value;
+  const effectiveHours=document.querySelector(`[data-weather-hours="${s}"]`).value;
+  const temperatureC=document.querySelector(`[data-weather-temp="${s}"]`).value;
+  const filled=weather||effectiveHours!=='';
+  // Shift yang dikosongin = dihapus. Suhu cuma ikut disimpan kalau shift-nya diisi.
+  if(!filled&&!woWeather[s])continue;
+  try{await weatherApi('save',{woId,reportDate,shift:s,weather,effectiveHours,temperatureC:filled?temperatureC:''});if(filled)saved++}
+  catch(err){errors.push(SHIFT_LABELS[s].split(' ')[0]+': '+err.message)}
+ }
+ await loadWoWeather();
+ $('#weatherStatus').textContent=errors.length?'Gagal: '+errors.join('; '):'Cuaca tersimpan ('+saved+' shift).';
+});
+
 function groupLeavesByItem(leaves){
  const map=new Map();
  for(const r of leaves){
@@ -357,30 +485,9 @@ function groupLeavesByItem(leaves){
  }
  return [...map.values()];
 }
-function syncShiftInputsToState(){
- document.querySelectorAll('[data-shift-weather]').forEach(el=>{
-  const [sid,shift]=el.dataset.shiftWeather.split(':');
-  if(!el.value)return;
-  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
-  itemWeather[sid][shift].weather=el.value;
- });
- document.querySelectorAll('[data-shift-temp]').forEach(el=>{
-  const [sid,shift]=el.dataset.shiftTemp.split(':');
-  if(el.value==='')return;
-  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
-  itemWeather[sid][shift].temperatureC=el.value;
- });
- document.querySelectorAll('[data-shift-hours]').forEach(el=>{
-  const [sid,shift]=el.dataset.shiftHours.split(':');
-  if(el.value==='')return;
-  itemWeather[sid]=itemWeather[sid]||{};itemWeather[sid][shift]=itemWeather[sid][shift]||{};
-  itemWeather[sid][shift].effectiveHours=el.value;
- });
-}
 function renderBatchList(){
  const query=$('#progressSearch').value.trim().toLowerCase();
  document.querySelectorAll('[data-batch-qty]').forEach(el=>{if(el.value.trim()!=='')keptValues[el.dataset.batchQty]=el.value;else delete keptValues[el.dataset.batchQty]});
- syncShiftInputsToState();
  const allLeaves=batchDetails.filter(r=>r.row_kind==='ITEM');
  const leaves=query?allLeaves.filter(r=>{
   const haystack=(r.item_code+' '+r.item_description+' '+pathFor(batchDetails,r)).toLowerCase();
@@ -390,21 +497,6 @@ function renderBatchList(){
  $('#progressBatchList').innerHTML=groups.length?groups.map(g=>`<div class="item-group">
   <div class="ig-header">
    <div class="pc-item">${escapeHtml(g.item_code)} — ${escapeHtml(g.item_description)}</div>
-   <p class="hint">Cuaca per shift (berlaku buat semua sub-item di bawah, tanggal ini)</p>
-   ${SHIFTS.map(s=>{
-    const cur=(itemWeather[g.sms_item_id]||{})[s]||{};
-    return `<div class="shift-block">
-     <label>${SHIFT_LABELS[s]} — Cuaca</label>
-     <select data-shift-weather="${g.sms_item_id}:${s}">
-      <option value="">- pilih -</option>
-      ${Object.entries(WEATHER_LABELS).map(([v,l])=>`<option value="${v}" ${cur.weather===v?'selected':''}>${l}</option>`).join('')}
-     </select>
-     <div class="field-row">
-      <div><label>Suhu (°C)</label><input type="number" step="any" data-shift-temp="${g.sms_item_id}:${s}" value="${cur.temperatureC??''}"></div>
-      <div><label>Jam Efektif</label><input type="number" step="0.5" min="0" data-shift-hours="${g.sms_item_id}:${s}" value="${cur.effectiveHours??''}"></div>
-     </div>
-    </div>`;
-   }).join('')}
   </div>
   ${g.leaves.map(r=>`<div class="progress-card">
    <div class="pc-path">${escapeHtml(pathFor(batchDetails,r))}</div>
@@ -443,10 +535,9 @@ $('#progressBatchList').addEventListener('click',e=>{
 });
 $('#progressLoadDetails').onclick=busy($('#progressLoadDetails'),async()=>{
  const smsId=$('#progressSms').value;if(!smsId)return;
- if(!$('#progressBatchDate').value)$('#progressBatchDate').value=new Date().toISOString().slice(0,10);
+ if(!$('#progressBatchDate').value){$('#progressBatchDate').value=localDateOf(new Date());loadWoWeather()}
  $('#progressSearch').value='';keptValues={};stagedPhotos={};
  batchDetails=await dailyApi('list_sms_details',{smsId});
- await loadItemWeather();
  const total=renderBatchList();
  await refreshManpowerForDate();
  await refreshMaterialForDate();
@@ -460,9 +551,8 @@ $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
  const reportDate=$('#progressBatchDate').value;
  if(!reportDate){status('Isi tanggal dulu.');return;}
  const inputs=[...document.querySelectorAll('[data-batch-qty]')].filter(el=>el.value.trim()!=='');
- const shiftWeatherEls=[...document.querySelectorAll('[data-shift-weather]')].filter(el=>el.value);
- if(!inputs.length&&!shiftWeatherEls.length){status('Belum ada qty atau cuaca yang diisi.');return;}
- let ok=0,fail=0,photoFail=0,weatherFail=0,firstError='';
+ if(!inputs.length){status('Belum ada qty yang diisi.');return;}
+ let ok=0,fail=0,photoFail=0,firstError='';
  for(const el of inputs){
   const detailId=el.dataset.batchQty;
   const qty=Number(el.value);
@@ -478,15 +568,8 @@ $('#progressSaveAll').onclick=busy($('#progressSaveAll'),async()=>{
   }
   catch(err){fail++;if(!firstError)firstError=err.message}
  }
- for(const el of shiftWeatherEls){
-  const [smsItemId,shift]=el.dataset.shiftWeather.split(':');
-  const tempEl=document.querySelector('[data-shift-temp="'+smsItemId+':'+shift+'"]');
-  const hoursEl=document.querySelector('[data-shift-hours="'+smsItemId+':'+shift+'"]');
-  try{await dailyApi('save_item_weather',{smsItemId,reportDate,shift,weather:el.value,temperatureC:tempEl?tempEl.value:'',effectiveHours:hoursEl?hoursEl.value:''})}
-  catch(err){weatherFail++}
- }
  await $('#progressLoadDetails').onclick();
- status(ok+' progress tersimpan'+(weatherFail?', '+weatherFail+' cuaca gagal disimpan':'')+(photoFail?', '+photoFail+' foto gagal upload':'')+(fail?', '+fail+' gagal ('+firstError+')':'.'));
+ status(ok+' progress tersimpan'+(photoFail?', '+photoFail+' foto gagal upload':'')+(fail?', '+fail+' gagal ('+firstError+')':'.'));
 });
 
 // --- Daily Report (baca-saja): header proyek + tim per klasifikasi + rekap per main group
@@ -497,14 +580,15 @@ function computeDayProgress(startDate,endDate,reportDate){
  const ms=86400000,start=new Date(startDate+'T00:00:00'),end=new Date(endDate+'T00:00:00'),cur=new Date(reportDate+'T00:00:00');
  return {dayNum:Math.round((cur-start)/ms)+1,total:Math.round((end-start)/ms)+1};
 }
-function shiftSummaryLine(s){return `${SHIFT_LABELS[s.shift]||s.shift}: ${escapeHtml(WEATHER_LABELS[s.weather]||s.weather)}`+(s.temperatureC!=null?` (${fmt(s.temperatureC)}°C)`:'')+(s.effectiveHours!=null?`, ${fmt(s.effectiveHours)} jam`:'')}
+function shiftSummaryLine(s){return `${SHIFT_LABELS[s.shift]||s.shift}: ${escapeHtml(WEATHER_LABELS[s.weather]||s.weather||'-')}`+(s.temperatureC!=null?` (${fmt(s.temperatureC)}°C)`:'')+(s.effectiveHours!=null?`, ${fmt(s.effectiveHours)} jam`:'')}
 let lastReportContext=null;
 $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  const woId=$('#progressWo').value,smsId=$('#progressSms').value,reportDate=$('#progressBatchDate').value;
  if(!smsId||!reportDate){status('Pilih SMS dan tanggal dulu.');return}
- const [groups,header]=await Promise.all([
+ const [groups,header,weatherShifts]=await Promise.all([
   dailyApi('read_daily_report',{smsId,reportDate}),
-  dailyApi('get_report_header',{woId}).catch(()=>null)
+  dailyApi('get_report_header',{woId}).catch(()=>null),
+  weatherApi('list',{woId,reportDate}).catch(()=>[])
  ]);
  const materials=lastMaterialRows.filter(m=>m.category!=='EQUIPMENT');
  const equipmentReceived=lastMaterialRows.filter(m=>m.category==='EQUIPMENT');
@@ -516,7 +600,7 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
  lastReportContext={
   woLabel:$('#progressWo').selectedOptions[0]?.textContent||'-',
   smsLabel:$('#progressSms').selectedOptions[0]?.textContent||'-',
-  reportDate,groups,header,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,equipmentReceived,materialUsage,equipmentUsage
+  reportDate,groups,header,weatherShifts,manpowerGroups,manpowerTotal:lastManpowerRows.length,dayProgress,materials,equipmentReceived,materialUsage,equipmentUsage
  };
  const headerHtml=`<div class="report-header-block">
   <div><strong>Pekerjaan:</strong> ${escapeHtml(header?.projectName||'-')}</div>
@@ -526,6 +610,10 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   <div><strong>Konsultan Pengawas:</strong> ${escapeHtml(header?.supervisorConsultant||'-')}</div>
   <div><strong>No. SPK/Kontrak:</strong> ${escapeHtml(header?.contractNumber||'-')}</div>
   <div><strong>Hari ke:</strong> ${dayProgress?dayProgress.dayNum+' dari '+dayProgress.total+' hari':'-'}</div>
+ </div>`;
+ const weatherHtml=`<div class="report-header-block">
+  <strong>Cuaca</strong>
+  ${weatherShifts.length?weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join(''):'<div>Cuaca belum diisi</div>'}
  </div>`;
  const manpowerHtml=manpowerGroups.length?`<div class="report-header-block">
   <strong>Tenaga Kerja (Manpower) — Total ${lastManpowerRows.length} orang</strong>
@@ -547,9 +635,8 @@ $('#progressViewReport').onclick=busy($('#progressViewReport'),async()=>{
   <strong>Alat &amp; Tools Digunakan</strong>
   ${equipmentUsage.map(c=>`<div>${escapeHtml(c.item_description)} — ${fmt(c.qty)} ${escapeHtml(c.unit||'')} &middot; ${fmt(c.hours)} jam${c.check_out_at?'':' (masih checkin)'} &middot; oleh ${escapeHtml(c.recorded_by_name||'-')}</div>`).join('')}
  </div>`:'';
- $('#dailyReportView').innerHTML=headerHtml+manpowerHtml+materialHtml+equipmentReceivedHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
+ $('#dailyReportView').innerHTML=headerHtml+weatherHtml+manpowerHtml+materialHtml+equipmentReceivedHtml+materialUsageHtml+equipmentUsageHtml+(groups.length?groups.map(g=>`<div class="report-card">
    <div class="pc-item">${escapeHtml(g.itemCode)} — ${escapeHtml(g.itemDescription)}</div>
-   ${g.weatherShifts&&g.weatherShifts.length?`<div class="rc-shifts">${g.weatherShifts.map(s=>`<div>${shiftSummaryLine(s)}</div>`).join('')}</div>`:'<span class="rc-weather">Cuaca belum diisi</span>'}
    ${g.entries.map(e=>`<div class="rc-entry">
     <div class="pc-path">${escapeHtml(e._path)}</div>
     <div class="pc-meta">Qty: ${fmt(e.qty)} ${escapeHtml(e.unit||'')} &middot; Oleh: ${escapeHtml(e.recordedByNames||'-')} &middot; update terakhir ${new Date(e.lastUpdatedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div>
@@ -634,6 +721,14 @@ async function buildDailyReportDoc(){
  });
  let y=doc.lastAutoTable.finalY+18;
 
+ doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('CUACA',margin,y);
+ doc.autoTable({
+  startY:y+8,margin:{left:margin,right:margin},theme:'grid',styles:gridStyles,headStyles,
+  head:[['Shift','Kondisi Cuaca','Suhu (°C)','Jam Efektif']],
+  body:lastReportContext.weatherShifts.length?lastReportContext.weatherShifts.map(s=>[SHIFT_LABELS[s.shift]||s.shift,WEATHER_LABELS[s.weather]||s.weather||'-',s.temperatureC!=null?fmt(s.temperatureC):'-',s.effectiveHours!=null?fmt(s.effectiveHours)+' Jam':'-']):[['Cuaca belum diisi','','','']]
+ });
+ y=doc.lastAutoTable.finalY+18;
+
  if(lastReportContext.manpowerGroups&&lastReportContext.manpowerGroups.length){
   if(y>pageHeight-100){doc.addPage();y=margin}
   doc.setFontSize(11);doc.setFont(undefined,'bold');doc.text('TENAGA KERJA (MANPOWER)',margin,y);
@@ -699,15 +794,6 @@ async function buildDailyReportDoc(){
   doc.setFontSize(11);doc.setFont(undefined,'bold');
   doc.text(String(g.itemCode+' — '+g.itemDescription),margin,y);
   y+=8;
-
-  if(g.weatherShifts&&g.weatherShifts.length){
-   doc.autoTable({
-    startY:y+6,margin:{left:margin,right:margin},theme:'grid',styles:gridStyles,headStyles,
-    head:[['Shift','Kondisi Cuaca','Suhu (°C)','Jam Efektif']],
-    body:g.weatherShifts.map(s=>[SHIFT_LABELS[s.shift]||s.shift,WEATHER_LABELS[s.weather]||s.weather,s.temperatureC!=null?fmt(s.temperatureC):'-',s.effectiveHours!=null?fmt(s.effectiveHours)+' Jam':'-'])
-   });
-   y=doc.lastAutoTable.finalY+10;
-  }
 
   doc.autoTable({
    startY:y,margin:{left:margin,right:margin},theme:'grid',styles:{...gridStyles,valign:'top'},
