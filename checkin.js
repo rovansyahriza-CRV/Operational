@@ -22,7 +22,7 @@ function loadLib(name){
 
 // --- Tab ---
 let activeTab='progress';
-const TABS={dashboard:['#tabDashboard','#dashboardPane'],progress:['#tabProgress','#progressPane'],checkin:['#tabCheckin','#checkinPane']};
+const TABS={dashboard:['#tabDashboard','#dashboardPane'],progress:['#tabProgress','#progressPane'],checkin:['#tabCheckin','#checkinPane'],claim:['#tabClaim','#claimPane']};
 function showTab(tab,refresh=true){
  activeTab=tab;
  for(const [name,[tabId,paneId]] of Object.entries(TABS)){
@@ -35,6 +35,7 @@ function showTab(tab,refresh=true){
  if(!refresh)return;
  if(tab==='checkin')enterCheckin();
  else if(tab==='dashboard')enterDashboard();
+ else if(tab==='claim')enterClaim();
  else refreshManpowerForDate();
 }
 for(const name of Object.keys(TABS))$(TABS[name][0]).onclick=()=>showTab(name);

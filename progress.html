@@ -41,6 +41,7 @@
   <button id="tabDashboard" type="button" role="tab" class="tab" aria-selected="false">📊 Dashboard</button>
   <button id="tabProgress" type="button" role="tab" class="tab active" aria-selected="true">📋 Progress</button>
   <button id="tabCheckin" type="button" role="tab" class="tab" aria-selected="false">👷 Check-in</button>
+  <button id="tabClaim" type="button" role="tab" class="tab" aria-selected="false">💰 Klaim Release</button>
  </div>
 
  <div id="dashboardPane" class="db-root" hidden>
@@ -101,6 +102,31 @@
 
   <h2>Tim aktif di WO ini</h2>
   <div id="mpActiveList"><p class="empty">Pilih WO buat lihat tim yang sedang check-in.</p></div>
+ </div>
+
+ <div id="claimPane" hidden>
+  <p class="hint">Geser progress &amp; resource yang udah tercatat di WO ini (WO-Internal/Draft) ke WO Released buat tagihan. Item tujuan boleh beda dari item asal -- pilih WO Released dulu, baru item tujuannya kepilih otomatis kalau ada yang sama, atau ganti manual.</p>
+
+  <h2>1. Progress yang bisa diklaim</h2>
+  <div id="claimProgressList"><p class="empty">Pilih WO dulu di atas.</p></div>
+
+  <h2>2. Resource (manpower / material / alat)</h2>
+  <div class="field-row">
+   <div><label for="claimStartDate">Dari tanggal</label><input id="claimStartDate" type="date"></div>
+   <div><label for="claimEndDate">Sampai tanggal</label><input id="claimEndDate" type="date"></div>
+   <button id="claimLoadResources" type="button">Muat resource</button>
+  </div>
+  <div id="claimResourceList"><p class="empty">Pilih WO &amp; rentang tanggal, lalu Muat resource.</p></div>
+
+  <h2>3. WO Released tujuan</h2>
+  <label for="claimTargetWo">WO Released</label>
+  <select id="claimTargetWo"><option value="">Pilih WO tujuan</option></select>
+
+  <button id="claimSubmit" type="button" class="primary" disabled>💾 Kirim Klaim</button>
+  <p id="claimStatus" role="status"></p>
+
+  <h2>Riwayat klaim ke WO ini</h2>
+  <div id="claimHistoryList"><p class="empty">Pilih WO Released tujuan buat lihat riwayat klaim.</p></div>
  </div>
 
  <div id="progressPane">
@@ -185,5 +211,6 @@
 <script src="progress.js" defer></script>
 <script src="dashboard.js" defer></script>
 <script src="checkin.js" defer></script>
+<script src="claim.js" defer></script>
 </body>
 </html>

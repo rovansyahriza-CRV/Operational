@@ -302,6 +302,7 @@ $('#progressWo').addEventListener('change',async()=>{
  refreshMaterialBalance();
  refreshMaterialUsageForDate();
  refreshEquipmentCheckins();
+ if(typeof activeTab!=='undefined'&&activeTab==='claim')enterClaim();
 });
 
 // --- Detail Laporan --
