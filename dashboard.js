@@ -98,24 +98,28 @@ function renderDashboard(){
   <div class="db-tile"><span class="db-tile-label">WO terlambat</span><span class="db-tile-value">${lateCount} <small>dari ${wos.length}</small></span></div>
   <div class="db-tile"><span class="db-tile-label">Tim hadir hari ini</span><span class="db-tile-value">${teamToday} <small>orang</small></span></div>
  </div>`;
- $('#dbWoList').innerHTML=wos.map(w=>{
-  const st=woStatus(w,today),real=w.progress*100;
-  return `<article class="db-wo" data-wo="${escapeHtml(w.id)}">
-   <div class="db-wo-head"><div><div class="pc-item">${escapeHtml(w.number)}</div><div class="pc-path">${escapeHtml(w.title||'-')}</div></div><span class="tag">${escapeHtml(w.status)}</span></div>
-   <div class="db-bar" role="img" aria-label="Realisasi ${pct(real)}${st.plan!=null?', rencana '+pct(st.plan):''}">
-    <div class="db-bar-fill" style="width:${Math.min(100,real)}%"></div>
-    ${st.plan!=null?`<div class="db-bar-plan" style="left:${st.plan}%" title="Rencana hari ini ${pct(st.plan)}"></div>`:''}
-   </div>
-   <div class="db-wo-nums"><span><strong>${pct(real)}</strong> realisasi</span>${st.plan!=null?`<span>${pct(st.plan)} rencana</span>`:''}</div>
-   <div class="db-wo-nums db-wo-money"><span><strong>${rupiahFull(w.progress*Number(w.value||0))}</strong></span>${st.plan!=null?`<span>${rupiahFull(st.plan/100*Number(w.value||0))}</span>`:''}</div>
-   <div class="db-status db-status-${st.cls}">${escapeHtml(st.label)}</div>
-   <div class="pc-meta">Nilai WO ${rupiahFull(w.value)} · ${w.itemCount} item · Tim hari ini ${w.teamToday} orang · Update terakhir ${w.lastProgressDate?fmtDate(parseDate(w.lastProgressDate)):'belum ada'}${w.startDate&&w.endDate?' · '+fmtDate(parseDate(w.startDate))+' – '+fmtDate(parseDate(w.endDate)):''}</div>
-   ${w.itemsNoBreakdown?`<p class="db-warn">⚠ ${w.itemsNoBreakdown} item belum ada breakdown ber-target, dihitung 0%.</p>`:''}
-   <div class="db-actions"><button type="button" data-db-detail="${escapeHtml(w.id)}">Kurva-S &amp; item ▾</button><button type="button" class="primary" data-db-open="${escapeHtml(w.id)}">Buka Progress →</button></div>
-   <div class="db-detail" hidden></div>
-  </article>`;
- }).join('');
+ const working=wos.filter(w=>w.releaseRole!=='RELEASED'),released=wos.filter(w=>w.releaseRole==='RELEASED');
+ const group=(title,list)=>list.length?`<div class="db-wo-group"><h3 class="db-group-title">${escapeHtml(title)} (${list.length})</h3><div class="db-wo-grid">${list.map(w=>woCardHtml(w,today)).join('')}</div></div>`:'';
+ $('#dbWoList').classList.toggle('db-grouped',working.length>0&&released.length>0);
+ $('#dbWoList').innerHTML=group('WO Kerja (Internal)',working)+group('WO Released',released);
  applyWoFilter();
+}
+function woCardHtml(w,today){
+ const st=woStatus(w,today),real=w.progress*100;
+ return `<article class="db-wo" data-wo="${escapeHtml(w.id)}">
+  <div class="db-wo-head"><div><div class="pc-item">${escapeHtml(w.number)}</div><div class="pc-path">${escapeHtml(w.title||'-')}</div></div><span class="tag">${escapeHtml(w.status)}</span></div>
+  <div class="db-bar" role="img" aria-label="Realisasi ${pct(real)}${st.plan!=null?', rencana '+pct(st.plan):''}">
+   <div class="db-bar-fill" style="width:${Math.min(100,real)}%"></div>
+   ${st.plan!=null?`<div class="db-bar-plan" style="left:${st.plan}%" title="Rencana hari ini ${pct(st.plan)}"></div>`:''}
+  </div>
+  <div class="db-wo-nums"><span><strong>${pct(real)}</strong> realisasi</span>${st.plan!=null?`<span>${pct(st.plan)} rencana</span>`:''}</div>
+  <div class="db-wo-nums db-wo-money"><span><strong>${rupiahFull(w.progress*Number(w.value||0))}</strong></span>${st.plan!=null?`<span>${rupiahFull(st.plan/100*Number(w.value||0))}</span>`:''}</div>
+  <div class="db-status db-status-${st.cls}">${escapeHtml(st.label)}</div>
+  <div class="pc-meta">Nilai WO ${rupiahFull(w.value)} · ${w.itemCount} item · Tim hari ini ${w.teamToday} orang · Update terakhir ${w.lastProgressDate?fmtDate(parseDate(w.lastProgressDate)):'belum ada'}${w.startDate&&w.endDate?' · '+fmtDate(parseDate(w.startDate))+' – '+fmtDate(parseDate(w.endDate)):''}</div>
+  ${w.itemsNoBreakdown?`<p class="db-warn">⚠ ${w.itemsNoBreakdown} item belum ada breakdown ber-target, dihitung 0%.</p>`:''}
+  <div class="db-actions"><button type="button" data-db-detail="${escapeHtml(w.id)}">Kurva-S &amp; item ▾</button><button type="button" class="primary" data-db-open="${escapeHtml(w.id)}">Buka Progress →</button></div>
+  <div class="db-detail" hidden></div>
+ </article>`;
 }
 
 $('#dbWoList').addEventListener('click',async e=>{

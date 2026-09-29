@@ -26,7 +26,7 @@ async function enterClaim(){
 
 async function loadClaimTargetWoOptions(){
  try{
-  const rows=(await api('list_wo')).filter(w=>(!w.wo_kind||w.wo_kind==='DIRECT')&&!w.departemen&&!/^INT-/.test(w.contract_number||''));
+  const rows=(await api('list_wo')).filter(w=>w.release_role==='RELEASED');
   claimTargetWoList=rows;
   $('#claimTargetWo').innerHTML='<option value="">Pilih WO tujuan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
  }catch(err){status('Gagal memuat daftar WO: '+err.message)}
@@ -67,15 +67,14 @@ $('#claimTargetWo').addEventListener('change',async()=>{
   updateClaimSubmitState();
   return;
  }
- const wo=claimTargetWoList.find(w=>w.id===woId);
  try{
-  claimCommercialItems=wo?await api('master',{contractId:wo.contract_id}):[];
- }catch(err){claimCommercialItems=[];status('Gagal memuat item kontrak WO tujuan: '+err.message)}
+  claimCommercialItems=await dailyApi('list_release_target_items',{targetWoId:woId});
+ }catch(err){claimCommercialItems=[];status('Gagal memuat item SMS WO tujuan: '+err.message)}
  rowEls.forEach(el=>{
   const defaultId=el.dataset.commercialItem;
-  const options=claimCommercialItems.map(i=>`<option value="${i.id}" ${i.id===defaultId?'selected':''}>${escapeHtml(i.code||'')} ${escapeHtml(i.description||'')}</option>`).join('');
-  el.querySelector('.claim-target-item').innerHTML=options?'<option value="">-- pilih item --</option>'+options:'<option value="">Tidak ada item di kontrak WO ini</option>';
-  if(defaultId&&claimCommercialItems.some(i=>i.id===defaultId))el.querySelector('.claim-target-item').value=defaultId;
+  const options=claimCommercialItems.map(i=>`<option value="${i.commercialItemId}" ${i.commercialItemId===defaultId?'selected':''}>${escapeHtml(i.code||'')} ${escapeHtml(i.description||'')}</option>`).join('');
+  el.querySelector('.claim-target-item').innerHTML=options?'<option value="">-- pilih item --</option>'+options:'<option value="">WO ini belum punya item di SMS -- tambahkan lewat "+ Buat WO-SMS" dulu</option>';
+  if(defaultId&&claimCommercialItems.some(i=>i.commercialItemId===defaultId))el.querySelector('.claim-target-item').value=defaultId;
  });
  loadClaimHistory(woId);
  updateClaimSubmitState();

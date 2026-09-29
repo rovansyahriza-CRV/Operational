@@ -36,3 +36,68 @@ body.auth-locked main,body.auth-locked aside{display:none!important;}
 .project-wo-internal{padding:8px 12px}
 .project-wo-internal .project-wo-title{margin:2px 0 0}
 .project-wos-sub{margin-top:12px}.project-wo-indirect{background:#fffaf2;border-color:#f1e3c8}
+
+/* WO–SMS: stepper pembuatan + Daftar WO */
+.wo-views{display:inline-flex;gap:4px;padding:4px;background:#e9eef4;border-radius:10px;margin-bottom:18px}
+.wo-views button{border:0;background:transparent;color:#4c6380}
+.wo-views button.active{background:#fff;color:#b84020;box-shadow:0 1px 4px #12253b1a}
+.stepper{list-style:none;display:flex;align-items:stretch;gap:10px;padding:0;margin:0 0 6px;flex-wrap:wrap}
+.stepper li{display:flex;align-items:center;gap:10px}
+.stepper li+li::before{content:"➜";color:#6f93c6;font-size:18px}
+.stepper button{display:flex;align-items:center;gap:10px;text-align:left;background:#fff;border:1px solid #dbe2eb;min-width:170px}
+.stepper button b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#e9eef4;color:#4c6380;font-size:13px;flex-shrink:0}
+.stepper button span{display:flex;flex-direction:column}
+.stepper button small{font-weight:400;font-style:italic;font-size:11px;color:#7a889a}
+.stepper li.active button{border-color:#df5a2c;box-shadow:0 0 0 2px #df5a2c22}
+.stepper li.active b{background:#df5a2c;color:#fff}
+.stepper li.done b{background:#3f7d5b;color:#fff}
+.stepper-save span{display:inline-block;background:#4f6228;color:#fff;font-weight:700;letter-spacing:1px;padding:11px 22px;border-radius:7px}
+.flow-note{background:#eef5ff;border-left:3px solid #6f93c6;color:#35507a;padding:10px 14px;margin:12px 0 0;font-size:13px}
+.flow-step h3 small{font-weight:400;color:#7a889a}
+.flow-mode{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.flow-mode label{flex-direction:row;align-items:center;gap:8px;background:#f4f7fb;border:1px solid #dfe7ef;padding:11px 14px;border-radius:8px;cursor:pointer}
+.flow-mode input{accent-color:#df5a2c}
+.flow-ctx{background:#f4f7fb;border-radius:8px;padding:10px 14px;margin:0 0 18px;font-weight:600;color:#35507a}
+.flow-pick-bar{display:flex;gap:15px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+.flow-pick-bar .search{flex:1}
+.flow-picker{max-height:340px}
+.flow-picker tr.picked{background:#fff4ee}
+.flow-picker td{padding:10px 12px}
+.flow-nav{display:flex;justify-content:space-between;gap:10px;margin-top:22px;flex-wrap:wrap}
+.flow-save{background:#4f6228!important;border-color:#4f6228!important;min-width:150px;letter-spacing:1px}
+.flow-error{color:#b43131;min-height:1em;margin:8px 0}
+.flow-item-select{max-width:640px;margin-bottom:16px}
+.flow-detail-forms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:6px}
+.flow-detail-forms fieldset{border:1px solid #e0e6ef;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.flow-detail-forms legend{font-weight:700;font-size:13px;padding:0 6px;color:#35507a}
+.flow-detail-forms button{margin-top:auto}
+.flow-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.flow-detail-forms input,.flow-detail-forms select{width:100%}
+.muted-row{opacity:.55}
+.wo-tree{display:flex;flex-direction:column;gap:12px}
+.wo-node{background:#fff;border:1px solid #dfe6ee;border-radius:12px}
+.wo-node.open{border-color:#c9d6e5}
+.wo-row{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.wo-main{flex:1;cursor:pointer;min-width:0}
+.wo-sub{color:#637084;font-size:13px;margin-top:4px;overflow-wrap:anywhere}
+.wo-actions{display:flex;gap:8px;flex-wrap:wrap}
+.twisty{border:0;background:transparent;padding:4px 6px;color:#4c6380;font-size:14px}
+.wo-children{border-top:1px solid #e6ebf1;padding:10px 16px 14px 46px;display:flex;flex-direction:column;gap:8px}
+.sms-node{border:1px solid #e3e9f0;border-radius:10px;background:#fbfcfe}
+.sms-row{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;flex-wrap:wrap}
+.sms-body{padding:4px 14px 14px}
+.sms-actions{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+.sms-actions button{padding:8px 12px;font-size:13px}
+.sms-item{border-top:1px solid #e9eef4;padding:9px 0}
+.sms-item-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center}
+.sms-item-row button{padding:6px 10px;font-size:12px}
+.detail-tree{list-style:none;margin:6px 0 0;padding:0 0 0 14px;font-size:13px;color:#46607e}
+.detail-tree li{padding:2px 0}
+.detail-tree .kind{display:inline-block;min-width:62px;font-size:11px;color:#8a97a8}
+.tag.st-approved{background:#e8f5ee;color:#276749;border-color:#bfe0cd}
+.tag.st-submitted{background:#eef5ff;color:#35507a;border-color:#c9daf2}
+.tag.st-draft{background:#fff6e8;color:#8a5a14;border-color:#f0dcb6}
+.tag.st-released{background:#eef2ff;color:#3b4ba8;border-color:#c7cdf5;margin-left:6px}
+dialog.wide-dialog{max-width:760px}
+@media(max-width:1000px){.flow-detail-forms{grid-template-columns:1fr}.stepper li+li::before{display:none}.stepper button{min-width:0}}
+@media(max-width:600px){.wo-row{flex-wrap:wrap}.wo-children{padding-left:16px}.sms-item-row{grid-template-columns:1fr}}

@@ -8,6 +8,9 @@
 .db-root .db-hint{font-size:12px;color:var(--muted)}
 .db-wo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
 .db-wo-grid .db-wo{margin-bottom:0}
+.db-wo-grid.db-grouped{display:block}
+.db-wo-group+.db-wo-group{margin-top:22px}
+.db-group-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 0 10px}
 .db-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .db-tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px}
 .db-tile-label{font-size:12px;color:var(--muted)}

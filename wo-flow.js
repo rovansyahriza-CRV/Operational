@@ -36,7 +36,7 @@ function startFlow(opts={}){
  if(!woContracts.size&&canWo())loadWoList().catch(err=>status(err.message));
  headerIds.forEach(id=>$('#'+id).value=opts.header?.[id]||'');
  if(!opts.header)$('#smsDate').value=new Date().toISOString().slice(0,10);
- $('#woNo').value='';$('#woTitle').value='';$('#flowItemSearch').value='';
+ $('#woNo').value='';$('#woTitle').value='';$('#woReleaseRole').value='WORKING';$('#flowItemSearch').value='';
  document.querySelector(`[name="flowWoMode"][value="${flow.mode}"]`).checked=true;
  renderFlowStep1();renderWo();flowGoto(opts.step||1,true);
 }
@@ -51,7 +51,7 @@ function renderFlowStep1(){
  $('#flowNewWo').hidden=flow.mode!=='new';$('#flowExistingWo').hidden=flow.mode!=='existing';
  const locked=flowLocked();
  document.querySelectorAll('[name="flowWoMode"],#flowExistingWoSel,#flowContract').forEach(el=>el.disabled=locked);
- $('#woNo').disabled=$('#woTitle').disabled=!!flow.savedWoId;
+ $('#woNo').disabled=$('#woTitle').disabled=$('#woReleaseRole').disabled=!!flow.savedWoId;
  $('#flowModeNote').hidden=!flow.label;$('#flowModeNote').textContent=flow.label;
 }
 document.querySelectorAll('[name="flowWoMode"]').forEach(r=>r.onchange=()=>{flow.mode=r.value;if(flow.mode==='new')flow.woId='';else flow.contractId='';renderFlowStep1()});
@@ -187,7 +187,7 @@ $('#flowSave').onclick=busy($('#flowSave'),async()=>{
  try{
   let woId=flow.mode==='existing'?flow.woId:flow.savedWoId;
   if(!woId){
-   const r=await api('save_wo',{contractId:flow.contractId,number:$('#woNo').value.trim(),title:$('#woTitle').value.trim(),items:[]});
+   const r=await api('save_wo',{contractId:flow.contractId,number:$('#woNo').value.trim(),title:$('#woTitle').value.trim(),releaseRole:$('#woReleaseRole').value,items:[]});
    woId=flow.savedWoId=r.woId;renderFlowStep1();
    progress.push('WO '+$('#woNo').value.trim());
   }
@@ -256,7 +256,7 @@ function renderWoTree(){
 function woNodeHtml(w){
  const open=woTreeOpen.has(w.id),c=woContracts.get(w.contract_id),sms=smsListCache.get(w.id);
  const approve=w.status==='DRAFT'&&canApproveWo()?`<button type="button" data-wo-approve="${w.id}">Approval internal WO</button>`:'';
- return `<div class="wo-node${open?' open':''}" id="wo-node-${w.id}"><div class="wo-row"><button type="button" class="twisty" data-wo-toggle="${w.id}" aria-expanded="${open}" aria-label="Buka ${escapeHtml(w.number)}">${open?'▾':'▸'}</button><div class="wo-main" data-wo-toggle="${w.id}"><strong>${escapeHtml(w.number)}</strong>${w.revision&&w.revision!=='01'?` <small>Rev ${escapeHtml(w.revision)}</small>`:''} ${statusTag(w.status)}<div class="wo-sub">${escapeHtml(w.title||'-')} · ${escapeHtml(contractLabel(c))}</div></div><div class="wo-actions"><button type="button" class="primary" data-wo-add-sms="${w.id}">+ SMS baru</button><button type="button" data-wo-revise="${w.id}">Revisi WO</button>${approve}</div></div>
+ return `<div class="wo-node${open?' open':''}" id="wo-node-${w.id}"><div class="wo-row"><button type="button" class="twisty" data-wo-toggle="${w.id}" aria-expanded="${open}" aria-label="Buka ${escapeHtml(w.number)}">${open?'▾':'▸'}</button><div class="wo-main" data-wo-toggle="${w.id}"><strong>${escapeHtml(w.number)}</strong>${w.revision&&w.revision!=='01'?` <small>Rev ${escapeHtml(w.revision)}</small>`:''} ${statusTag(w.status)}${w.release_role==='RELEASED'?'<span class="tag st-released">Released</span>':''}<div class="wo-sub">${escapeHtml(w.title||'-')} · ${escapeHtml(contractLabel(c))}</div></div><div class="wo-actions"><button type="button" class="primary" data-wo-add-sms="${w.id}">+ SMS baru</button><button type="button" data-wo-revise="${w.id}">Revisi WO</button>${approve}</div></div>
  ${open?`<div class="wo-children">${!sms?'<p class="empty">Memuat SMS...</p>':sms.length?sms.map(s=>smsNodeHtml(w,s)).join(''):'<p class="empty">Belum ada SMS di WO ini.</p>'}</div>`:''}</div>`;
 }
 function smsNodeHtml(w,s){
