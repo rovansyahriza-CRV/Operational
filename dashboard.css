@@ -67,3 +67,31 @@
 .db-item .db-mini{margin-top:6px}
 .db-item-total{border-bottom:none;border-top:2px solid var(--border);margin-top:2px}
 .db-item-total b{font-size:14px}
+/* Cost vs Progress (menu 06) -- numpang token & komponen .db-root di atas. */
+.cost-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cost-tiles small{font-size:11px;color:var(--muted)}
+.cost-root .banner{margin:0 0 14px}
+.cost-table td small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.cost-table td .tag{margin-left:4px}
+.cost-table tbody tr{cursor:pointer}
+.cost-table tbody tr:hover,.cost-table tbody tr.cost-open{background:#fff4ee}
+.cost-table tbody tr:focus-visible{outline:2px solid var(--series-2);outline-offset:-2px}
+.cost-good{color:var(--success);font-weight:600}
+.cost-bad{color:var(--danger);font-weight:600}
+.cost-good small,.cost-bad small{display:inline;font-weight:400}
+.cost-muted{color:var(--muted)}
+.cost-detail{margin-top:16px}
+.cost-detail h3 small{font-weight:400;color:var(--muted)}
+.cost-detail h4{font-size:13px;margin:16px 0 8px;color:var(--muted)}
+.cost-chart{max-width:760px}
+.cost-chart .db-tip{width:170px}
+.cost-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cost-key-cost{background:var(--series-2)}
+.cost-line-cost{stroke:var(--series-2)}
+.cost-dot-cost{fill:var(--series-2);stroke:var(--card);stroke-width:2}
+@media(max-width:900px){.cost-tiles{grid-template-columns:1fr 1fr}.cost-breakdown{grid-template-columns:1fr}}
+.equip-table td small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.equip-table input[type=number]{width:110px;padding:8px}
+.equip-table select{padding:8px}
+.equip-auto{color:#9a6700;font-weight:600}
+.cost-root>.wo-views{margin-bottom:6px}

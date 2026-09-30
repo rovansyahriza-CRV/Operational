@@ -656,7 +656,7 @@ $('#employeeSearch').addEventListener('input',()=>{
 $('#loginDialog').addEventListener('close',()=>{clearTimeout(employeeSearchTimer);++employeeSearchVersion;$('#employeeSuggestions').hidden=true;$('#employeePassword').value='';});
 
 const renderAuthControls=authUi,openWorkspaceTab=tab;
-function canOpenPage(name){return !!opSession && (name==='wo'||name==='progress'||name==='dashboard'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'&&hasPic('Operational Master Komersial'));}
+function canOpenPage(name){return !!opSession && (name==='wo'||name==='progress'||name==='dashboard'?hasPic('Operational WO'):name==='master'?(hasPic('Operational Master Komersial')||hasPic('Operational WO')):name==='projects'?hasPic('Operational Master Komersial'):name==='cost'&&hasPic('Operational Cost'));}
 tab=function(name){if(canOpenPage(name))openWorkspaceTab(name);};
 authUi=function(){
  renderAuthControls();const locked=!opSession;
@@ -665,7 +665,7 @@ authUi=function(){
  document.querySelectorAll('[data-tab]').forEach(el=>{el.hidden=!canOpenPage(el.dataset.tab);el.disabled=el.hidden;});
  $('#loginClose').hidden=locked;
  if(locked){document.querySelectorAll('dialog[open]').forEach(d=>{if(d.id!=='loginDialog')d.close();});if(!$('#loginDialog').open)$('#loginDialog').showModal();}
- else if(!canOpenPage(document.querySelector('[data-tab].active')?.dataset.tab))tab(hasPic('Operational Master Komersial')?'projects':'wo');
+ else if(!canOpenPage(document.querySelector('[data-tab].active')?.dataset.tab))tab(hasPic('Operational Master Komersial')?'projects':hasPic('Operational WO')?'wo':'cost');
 };
 $('#loginDialog').addEventListener('cancel',e=>{if(!opSession)e.preventDefault();});
 setInterval(()=>{if(opSession&&Date.parse(opSession.expiresAt)<=Date.now()){opSession=null;authUi();$('#loginError').textContent='Sesi berakhir. Silakan login kembali.';}},1000);
