@@ -300,11 +300,25 @@ $('#addProgress').onclick=busy($('#addProgress'),async()=>{
 
 let batchDetails=[];
 function pathFor(rows,row){const names=[];let cur=row;while(cur){names.unshift(cur.description);cur=cur.parent_id?rows.find(r=>r.id===cur.parent_id):null}return names.join(' / ')}
+// Dropdown WO ikut Kode project yang dipilih di atas (kosong = semua project).
+let progressWoRows=null,progressWoContracts=new Map();
+function progressWoProjectOf(woId){const w=(progressWoRows||[]).find(x=>x.id===woId);return w?progressWoContracts.get(w.contract_id)?.project_code||'':''}
+function renderProgressWoOptions(){
+ if(!progressWoRows)return [];
+ const code=currentLocalProject()?.code||'',sel=$('#progressWo'),keep=sel.value;
+ const rows=progressWoRows.filter(w=>!isInternalWo(w)&&(!code||progressWoContracts.get(w.contract_id)?.project_code===code));
+ sel.innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
+ if(rows.some(w=>w.id===keep))sel.value=keep;else if(keep)sel.dispatchEvent(new Event('change'));
+ return rows;
+}
 $('#progressLoadWos').onclick=busy($('#progressLoadWos'),async()=>{
- const rows=await api('list_wo');
- $('#progressWo').innerHTML='<option value="">Pilih WO tersimpan</option>'+rows.filter(w=>!isInternalWo(w)).map(w=>`<option value="${w.id}">${escapeHtml(w.number+' / '+w.contract_number+' / '+w.status)}</option>`).join('');
- status(rows.filter(w=>!isInternalWo(w)).length+' WO tersedia.');
+ const [rows,contracts]=await Promise.all([api('list_wo'),api('contracts')]);
+ progressWoRows=rows;progressWoContracts=new Map(contracts.map(c=>[c.id,c]));
+ const shown=renderProgressWoOptions(),p=currentLocalProject();
+ status(shown.length+' WO tersedia'+(p?' untuk project '+p.code+'.':'.'));
 });
+// setTimeout: tunggu handler #projectCode utama (di bawah) selesai normalisasi/rollback kode dulu.
+$('#projectCode').addEventListener('change',()=>setTimeout(renderProgressWoOptions));
 $('#progressWo').addEventListener('change',()=>{$('#progressLoadSms').disabled=!$('#progressWo').value;$('#progressSms').innerHTML='<option value="">Pilih SMS tersimpan</option>';$('#progressLoadDetails').disabled=true;$('#progressSaveAll').disabled=true;});
 $('#progressLoadSms').onclick=busy($('#progressLoadSms'),async()=>{
  const woId=$('#progressWo').value;if(!woId)return;

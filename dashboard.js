@@ -141,6 +141,10 @@ $('#dbWoList').addEventListener('click',async e=>{
 // Dipakai glue tiap halaman buat tombol "Buka Progress". true kalau WO ketemu.
 async function selectProgressWo(woId){
  if(![...$('#progressWo').options].some(o=>o.value===woId))await $('#progressLoadWos').onclick();
+ // Dropdown WO difilter per project -- kalau WO-nya dari project lain, pindahin Kode project dulu.
+ if(![...$('#progressWo').options].some(o=>o.value===woId)&&typeof progressWoProjectOf==='function'){
+  const code=progressWoProjectOf(woId);if(code&&$('#projectCode').value!==code){$('#projectCode').value=code;$('#projectCode').dispatchEvent(new Event('change'));renderProgressWoOptions()}
+ }
  if(![...$('#progressWo').options].some(o=>o.value===woId)){status('WO tidak ada di daftar WO kamu.');return false}
  if($('#progressWo').value!==woId){$('#progressWo').value=woId;$('#progressWo').dispatchEvent(new Event('change'))}
  return true;
