@@ -263,8 +263,16 @@ async function loadSmsData(smsId){
 }
 function renderWoTree(){
  if(!woListRows){$('#woTree').innerHTML='<p class="empty">Belum dimuat.</p>';return}
- const q=$('#woListSearch').value.trim().toLowerCase();
- const rows=woListRows.filter(w=>{const c=woContracts.get(w.contract_id);return !q||(w.number+' '+(w.title||'')+' '+contractLabel(c)).toLowerCase().includes(q)});
+ const q=$('#woListSearch').value.trim().toLowerCase(),role=$('#woListRole').value,projSel=$('#woListProject');
+ const projects=new Map();woListRows.forEach(w=>{const c=woContracts.get(w.contract_id);if(c)projects.set(c.project_code,c.project_name)});
+ const keep=projSel.value;
+ projSel.innerHTML='<option value="">Semua project</option>'+[...projects].sort((a,b)=>a[0].localeCompare(b[0])).map(([code,name])=>`<option value="${escapeHtml(code)}">${escapeHtml(code+' · '+name)}</option>`).join('');
+ projSel.value=projects.has(keep)?keep:'';
+ const proj=projSel.value;
+ const rows=woListRows.filter(w=>{const c=woContracts.get(w.contract_id);
+  if(proj&&c?.project_code!==proj)return false;
+  if(role&&(w.release_role||'WORKING')!==role)return false;
+  return !q||(w.number+' '+(w.title||'')+' '+contractLabel(c)).toLowerCase().includes(q)});
  $('#woTree').innerHTML=rows.map(woNodeHtml).join('')||`<p class="empty">${woListRows.length?'Tidak ada WO yang cocok.':'Belum ada WO. Klik "+ Buat WO–SMS" untuk mulai.'}</p>`;
 }
 function woNodeHtml(w){
@@ -291,7 +299,7 @@ function smsNodeHtml(w,s){
  }
  return `<div class="sms-node${open?' open':''}"><div class="sms-row" data-sms-toggle="${s.id}" data-wo="${w.id}"><span class="twisty">${open?'▾':'▸'}</span><strong>${escapeHtml(s.number)}</strong> <small>Rev ${escapeHtml(s.revision)}</small> ${statusTag(s.status)} <small>${escapeHtml(s.document_date||'')}</small></div>${open?`<div class="sms-body">${body}</div>`:''}</div>`;
 }
-$('#woListSearch').oninput=renderWoTree;
+$('#woListSearch').oninput=renderWoTree;$('#woListProject').onchange=renderWoTree;$('#woListRole').onchange=renderWoTree;
 $('#woListRefresh').onclick=busy($('#woListRefresh'),async()=>{smsListCache.clear();smsDataCache.clear();await loadWoList();status('Daftar WO dimuat ulang.')});
 $('#woTree').addEventListener('click',async e=>{
  const t=e.target.closest('button,[data-wo-toggle],[data-sms-toggle]');if(!t)return;
