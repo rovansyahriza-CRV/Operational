@@ -101,3 +101,4 @@ body.auth-locked main,body.auth-locked aside{display:none!important;}
 dialog.wide-dialog{max-width:760px}
 @media(max-width:1000px){.flow-detail-forms{grid-template-columns:1fr}.stepper li+li::before{display:none}.stepper button{min-width:0}}
 @media(max-width:600px){.wo-row{flex-wrap:wrap}.wo-children{padding-left:16px}.sms-item-row{grid-template-columns:1fr}}
+#woNo[readonly]{background:#eef2f7;color:#46607e;font-weight:600;cursor:default}

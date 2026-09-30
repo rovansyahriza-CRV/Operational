@@ -38,8 +38,21 @@ function startFlow(opts={}){
  if(!opts.header)$('#smsDate').value=new Date().toISOString().slice(0,10);
  $('#woNo').value='';$('#woTitle').value='';$('#woReleaseRole').value='WORKING';$('#flowItemSearch').value='';
  document.querySelector(`[name="flowWoMode"][value="${flow.mode}"]`).checked=true;
- renderFlowStep1();renderWo();flowGoto(opts.step||1,true);
+ renderFlowStep1();renderWo();flowGoto(opts.step||1,true);woNoRefresh();
 }
+// Nomor WO Kerja digenerate server (WO-<kode project>-<urut>); di form cuma preview -- nomor final
+// ditentukan pas SAVE (bisa geser kalau ada yang nyimpan duluan). WO Released tetap diketik manual.
+let woNoPeekSeq=0;
+async function woNoRefresh(){
+ if(!flow||flow.savedWoId)return;
+ const auto=$('#woReleaseRole').value==='WORKING',el=$('#woNo'),seq=++woNoPeekSeq;
+ el.readOnly=auto;el.placeholder=auto?'Otomatis setelah pilih kontrak':'Nomor WO dari client';
+ if(!auto){if(el.dataset.auto){el.value='';delete el.dataset.auto}return}
+ el.value='';el.dataset.auto='1';
+ if(!flow.contractId)return;
+ try{const r=await api('peek_wo_number',{contractId:flow.contractId});if(seq===woNoPeekSeq)el.value=r.number}catch(err){status(err.message)}
+}
+$('#woReleaseRole').onchange=()=>woNoRefresh();
 function flowLocked(){return !!(flow&&(flow.lockWo||flow.smsId||flow.reviseFromId||flow.savedWoId))}
 function renderFlowStep1(){
  const contracts=blanketContracts();
@@ -54,8 +67,8 @@ function renderFlowStep1(){
  $('#woNo').disabled=$('#woTitle').disabled=$('#woReleaseRole').disabled=!!flow.savedWoId;
  $('#flowModeNote').hidden=!flow.label;$('#flowModeNote').textContent=flow.label;
 }
-document.querySelectorAll('[name="flowWoMode"]').forEach(r=>r.onchange=()=>{flow.mode=r.value;if(flow.mode==='new')flow.woId='';else flow.contractId='';renderFlowStep1()});
-$('#flowContract').onchange=e=>{flow.contractId=e.target.value};
+document.querySelectorAll('[name="flowWoMode"]').forEach(r=>r.onchange=()=>{flow.mode=r.value;if(flow.mode==='new')flow.woId='';else flow.contractId='';renderFlowStep1();woNoRefresh()});
+$('#flowContract').onchange=e=>{flow.contractId=e.target.value;woNoRefresh()};
 $('#flowExistingWoSel').onchange=e=>{flow.woId=e.target.value;flow.contractId=(woListRows||[]).find(w=>w.id===flow.woId)?.contract_id||''};
 
 function flowWo(){return flow.mode==='existing'?(woListRows||[]).find(w=>w.id===flow.woId):null}
@@ -188,6 +201,7 @@ $('#flowSave').onclick=busy($('#flowSave'),async()=>{
   let woId=flow.mode==='existing'?flow.woId:flow.savedWoId;
   if(!woId){
    const r=await api('save_wo',{contractId:flow.contractId,number:$('#woNo').value.trim(),title:$('#woTitle').value.trim(),releaseRole:$('#woReleaseRole').value,items:[]});
+   if(r.number)$('#woNo').value=r.number;
    woId=flow.savedWoId=r.woId;renderFlowStep1();
    progress.push('WO '+$('#woNo').value.trim());
   }

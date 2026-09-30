@@ -48,7 +48,7 @@ function renderClaimProgress(){
   const balance=round2(Number(r.total_progress)-Number(r.total_claimed));
   return `<div class="claim-row" data-sms-item="${r.sms_item_id}" data-commercial-item="${r.commercial_item_id||''}">
    <div><strong>${escapeHtml(r.item_code||'')}</strong> ${escapeHtml(r.item_description||'')}</div>
-   <p class="hint">Total progress: ${fmt(r.total_progress)} ${escapeHtml(r.unit||'')} &middot; Sudah diklaim: ${fmt(r.total_claimed)} &middot; Sisa: <strong>${fmt(balance)}</strong></p>
+   <p class="hint">Progress (setara qty SMS): ${fmt(r.total_progress)} ${escapeHtml(r.unit||'')} &middot; Sudah diklaim: ${fmt(r.total_claimed)} &middot; Sisa: <strong>${fmt(balance)}</strong></p>
    <label>Qty diklaim sekarang</label>
    <input type="number" class="claim-qty" min="0" max="${balance}" step="any" placeholder="0">
    <label>Item tujuan di WO Released</label>
